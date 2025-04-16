@@ -3,7 +3,7 @@ import pandas as pd
 from tqdm import tqdm
 import textworld.gym
 from textworld import EnvInfos, gym
-import common
+import common_new as common
 from functools import lru_cache
 
 TRAIN_PATH = '/home/taku/Downloads/cog2019_ftwp/games/train'

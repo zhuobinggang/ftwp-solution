@@ -262,7 +262,23 @@ def extract_recipe(text, need_clean = True):
     else:
         # 如果没有找到，返回空字符串
         return ""
-    
+
+# 最好是经过clean的，不过不经过也可以
+def ingredients_from_recipe(recipe):
+    """
+    从给定的配方文本中提取原料。使用正则匹配'Ingredients:'和'Directions:'之间的内容
+
+    参数:
+    recipe (str): 包含配方的字符串。
+
+    返回:
+    string: 提取的原料字符串。
+    """
+    match = re.search(r'Ingredients:(.*?)Directions:', recipe, re.DOTALL)
+    if match:
+        ingredients = match.group(1).strip()
+        return ingredients
+    return ""
 
 class Logger_simple:
     def __init__(self, file_name = 'default_text_log'):
@@ -377,3 +393,7 @@ def description_simplify(description):
     txt = re.sub(r'([.:\-!=#",?])', r' ', txt)
     txt = re.sub(r'\s{2,}', ' ', txt)
     return txt.strip('.').strip()
+
+# BUG: Match whole words only, considering possible non-word boundaries like: 'east' in 'chicken breast'
+def whole_word_inside(word, text):
+    return re.search(rf'(?<!\w){re.escape(word)}(?!\w)', text)

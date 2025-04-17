@@ -84,7 +84,7 @@ def create_csv_dataset(outputpath = 'good_dataset', suffix = ''):
         df.to_csv(os.path.join(outputpath,
                         f'walkthrough_{split}{suffix}.csv'), index=False)
         
-def read_csv_dataset(inputpath = 'good_dataset', split = 'fake', suffix = ''):
+def read_csv_dataset(inputpath = 'good_dataset', split = 'fake_test', suffix = ''):
     df= pd.read_csv(os.path.join(inputpath,
                         f'walkthrough_{split}{suffix}.csv'))
     df['action_obs_pairs'] = df['action_obs_pairs'].apply(eval)

@@ -126,6 +126,7 @@ class Game_state:
         self.room = ''
         self.description_raw = ''
         self.recipe_raw = ''
+        self.recipe_clean_cache = ''
         self.inventory_raw = ''
         self.action_obs_pairs = []
         self.admissible_commands = []
@@ -133,11 +134,17 @@ class Game_state:
     def recipe_clean(self):
         if self.recipe_raw == '':
             return ''
-        return common.extract_recipe(self.recipe_raw, need_clean=True)
+        if self.recipe_clean_cache != '':
+            return self.recipe_clean_cache
+        else:
+            self.recipe_clean_cache = common.extract_recipe(self.recipe_raw, need_clean=True)
+        return self.recipe_clean_cache
     def inventory_clean(self):
         if self.inventory_raw == '':
             return ''
         return common.handle_inventory_text(self.inventory_raw)
+    def ingredients_from_recipe(self):
+        return common.ingredients_from_recipe(self.recipe_clean())
     def description_clean(self):
         return common.description_simplify(self.description_raw)
     def clean_action_obs_pairs(self):

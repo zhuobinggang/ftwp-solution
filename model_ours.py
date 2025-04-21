@@ -7,6 +7,7 @@ import torch.optim as optim
 from torch import nn
 import re
 from game import Game_handle_recipe, game_state_from_game, Game_state, default_game, test_game
+from game_command_generate import Game_command_generate
 from dataset_create_taku import read_csv_dataset, get_cv_games
 from bert_utils import default_tokenizer, init_bert_ours, action_select_loss, action_select_loss_batched
 from bert_utils import get_next_command, tokenize_game_state, command_indexs_tokenized, to_bert_input, DEVICE
@@ -23,6 +24,11 @@ Statistic = recordclass('Statistic', 'losses')
 import logging
 logger = logging.getLogger('model_ours')
 dbg = logger.debug
+
+# GAME_INIT_FUNC = Game_handle_recipe
+TRAIN_SPLIT = 'train_command_generate'
+SAVE_DIR = '/home/taku/Downloads/cog2019_ftwp/trained_models/roberta_ours_command_gen'
+GAME_INIT_FUNC = Game_command_generate
 
 
 class Model(nn.Module):
@@ -261,7 +267,7 @@ def valid_all(model: Model, split = 'partial_valid'):
     steps = []
     dbg(f'Validating {split} games, total {len(game_paths)}')
     for game_path in tqdm(game_paths, desc=f"Validating {split} games"):
-        game = Game_handle_recipe(game_path)
+        game = GAME_INIT_FUNC(game_path)
         result = test_game(game, model)
         score += result.score
         max_score += result.max_score
@@ -285,34 +291,21 @@ def get_model(checkpoint_path = None, init_func = Model):
         model.load_checkpoint(checkpoint_path)
     return model
 
-def train_reapeat(repeat = 3, epoch = 3, batch_size = 8):
+def train_reapeat(repeat = 3, epoch = 5, batch_size = 8):
     for rp in range(repeat):
         model = get_model()
         model.prefix = f'roberta_ours_repeat_{rp}'
         for i in range(epoch):
-            train(model, batch_size=batch_size, split='train')
+            train(model, batch_size=batch_size, split=TRAIN_SPLIT)
             score = valid_all(model, split='valid')
             dbg(f'Valid results, repeat {rp} epoch {i} score: {score}')
             # get_writer().add_scalar(f'Score/valid_rp{rp}', score, i)
-            model.save_checkpoint(base_path= '/home/taku/Downloads/cog2019_ftwp/trained_models/roberta_ours', epoch=i)
-
-# 补充2个epoch的训练
-def train_reapeat_plus(batch_size = 8):
-    for rp in range(3):
-        path = f'/home/taku/Downloads/cog2019_ftwp/trained_models/roberta_ours/roberta_ours_repeat_{rp}_epoch_{2}.pth'
-        model = get_model(path)
-        model.prefix = f'roberta_ours_repeat_{rp}'
-        for epoch_continue in range(3, 5): # epoch 3 ~ 5
-            train(model, batch_size=batch_size, split='train')
-            dbg(f'Valid results, repeat {rp} epoch {epoch_continue} score: {valid_all(model, split="valid")}')
-            dbg(f'Test results, repeat {rp} epoch {epoch_continue} score: {valid_all(model, split="test")}')
-            # get_writer().add_scalar(f'Score/valid_rp{rp}', score, i)
-            model.save_checkpoint(base_path= '/home/taku/Downloads/cog2019_ftwp/trained_models/roberta_ours', epoch=epoch_continue)
+            model.save_checkpoint(base_path = SAVE_DIR, epoch=i)
 
 def test_trained():
     best_model_index = [4,4,4]
     for rp in range(3):
-        path = f'/home/taku/Downloads/cog2019_ftwp/trained_models/roberta_ours/roberta_ours_repeat_{rp}_epoch_{best_model_index[rp]}.pth'
+        path = f'{SAVE_DIR}/roberta_ours_repeat_{rp}_epoch_{best_model_index[rp]}.pth'
         model = get_model(path, init_func=Model_ucb1)
         s1, avg_step = valid_all(model, split='valid')
         dbg(f'Full valid score ({rp}): {s1}, average step {avg_step}')

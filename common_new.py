@@ -391,6 +391,7 @@ def description_simplify(description):
     txt = re.sub(r'(\w)\-(\w)', r'\1 \2', txt)
     # remove punctuation
     txt = re.sub(r'([.:\-!=#",?])', r' ', txt)
+    # txt = re.sub(r'([.:\!=#",?])', r' ', txt) # NOTE: 我们将-给去掉了，因为有一些物品是用-连接的
     txt = re.sub(r'\s{2,}', ' ', txt)
     return txt.strip('.').strip()
 

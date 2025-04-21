@@ -85,6 +85,8 @@ class Game_handle_recipe(Game_with_history):
         return self.obs, self.reward, self.done, self.info
     def to_game_state(self):
         return game_state_from_game(self)
+    def get_admissible_commands(self):
+        return self.info['admissible_commands']
     
 def default_game():
     return Game_handle_recipe('/home/taku/Downloads/cog2019_ftwp/games/valid/tw-cooking-recipe1+cook+cut+drop+go6-M2qEFeOXcol3H1ql.ulx')
@@ -161,6 +163,7 @@ class Game_state:
     def available_commands_text(self):
         return common.actions_to_list_number(self.filtered_available_commands())
 
+
 def game_state_from_game(game: Game_handle_recipe):
     state = Game_state()
     state.room = common.extract_room_name(game.info['description'])
@@ -168,7 +171,7 @@ def game_state_from_game(game: Game_handle_recipe):
     state.recipe_raw = game.recipe_raw
     state.inventory_raw = game.info['inventory']
     state.action_obs_pairs = game.action_obs_pairs
-    state.admissible_commands = game.info['admissible_commands']
+    state.admissible_commands = game.get_admissible_commands() # NOTE: 4.21 Game将代理取得可能选项
     return state
 
 

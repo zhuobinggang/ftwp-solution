@@ -86,10 +86,30 @@ class Game_handle_recipe(Game_with_history):
     def to_game_state(self):
         return game_state_from_game(self)
     def get_admissible_commands(self):
-        return self.info['admissible_commands']
+        return common.filter_commands_default(self.info['admissible_commands'])
+    
+# NOTE: 在移动命令被执行后，obs改为prev_room to current_room。这样能够给模型一个直观的记忆。因为在prompt中没有上一个房间的信息，应该很有帮助。
+class Game_move_action_augment(Game_handle_recipe):
+    def act(self, action):
+        # 这里处理移动命令
+        if action.startswith('go'):
+            prev_room = common.extract_room_name(self.info['description'])
+            self.obs_raw, self.reward, self.done, self.info = self.env.step(action)
+            current_room = common.extract_room_name(self.obs_raw)
+            obs = f'From {prev_room} to {current_room}.'
+        else:
+            self.obs_raw, self.reward, self.done, self.info = self.env.step(action)
+            obs = self.obs_raw
+        # obs simplify
+        if action == 'examine cookbook' and common.is_recipe_feedback(obs):
+            self.recipe_raw = common.extract_recipe(obs, need_clean=False)
+            self.recipe = common.extract_recipe(self.recipe_raw, need_clean=True)
+        self.action_obs_pairs.append((action, obs)) # 不在这里处理，而是放到game_state中处理
+        self.obs = obs
+        return self.obs, self.reward, self.done, self.info
     
 def default_game():
-    return Game_handle_recipe('/home/taku/Downloads/cog2019_ftwp/games/valid/tw-cooking-recipe1+cook+cut+drop+go6-M2qEFeOXcol3H1ql.ulx')
+    return Game_move_action_augment('/home/taku/Downloads/cog2019_ftwp/games/valid/tw-cooking-recipe1+cook+cut+drop+go6-M2qEFeOXcol3H1ql.ulx')
 
 
 def test_game(game: Game_handle_recipe, model = Fake_model()):
@@ -104,11 +124,14 @@ def test_game(game: Game_handle_recipe, model = Fake_model()):
     counter = 0
     while counter < 100:
         counter += 1
-        action = model.predict(game_state_from_game(game))
+        game_state = game_state_from_game(game)
+        game_state.admissible_commands = game.get_admissible_commands() # BUG: 如果在game_state_from_game中调用这个会导致无限循环
+        action = model.predict(game_state)
         obs, reward, done, info = game.act(action)
         if done:
             break
     # result = (counter, info['score'], info['max_score'], info)
+    dbg(f'Game done: {info["score"]} / {info["max_score"]}, steps {counter}, won: {info["won"]}, lost: {info["lost"]}, path: {game.game_path}')
     result = TestResult(counter, info['score'], info['max_score'], info)
     return result
 
@@ -117,7 +140,7 @@ def clean_action_obs(action, obs):
     ACT, OBS = action, obs
     if action == 'examine cookbook' and common.is_recipe_feedback(obs):
         OBS = 'recipe got!'
-    elif common.is_description_feedback(obs):
+    elif common.is_description_feedback(obs): # NOTE: 如果使用Game_move_action_augment的话，obs会是"From room1 to room2."，不会进入这个分支
         room_name = common.extract_room_name(obs)
         OBS = f'you entered {room_name}.'
     OBS = ' '.join(OBS.split()).strip()
@@ -180,6 +203,8 @@ def test():
     from bert_utils import bert_prompt_from_game_state
     game = default_game()
     _ = game.reset()
+    game.act('go east')
+    game.act('go west')
     game.act('go east')
     game.act('examine cookbook')
     print(bert_prompt_from_game_state(game_state_from_game(game)))

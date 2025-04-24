@@ -69,26 +69,26 @@ def bert_tokenize_prompt_cut(game_state: Game_state, need_action_history = True)
     toker = default_tokenizer()
     SEP, CLS = special_tokens_dict().sep, special_tokens_dict().cls
     before_history_text = f'{CLS} '
-    before_history_text += f"Room: {game_state.room} {SEP}"
+    before_history_text += f"Room: {game_state.room} {SEP} "
     inventory_text = game_state.inventory_clean().strip()
     if inventory_text == '':
         inventory_text = EMPTY_INVENTORY
         inventory_item_count = 0
     else:
         inventory_item_count = 1 + inventory_text.count(',')
-    before_history_text += f"Inventory: {inventory_text}. Total {inventory_item_count} items. {SEP}"
+    before_history_text += f"Inventory: {inventory_text}. Total {inventory_item_count} items. {SEP} "
     recip_text = game_state.recipe_clean().strip()
     if recip_text == '':
         recip_text = EMPTY_RECIPE
-    before_history_text += f"Recipe: {recip_text} {SEP}"
+    before_history_text += f"Recipe: {recip_text} {SEP} "
     before_history_text += 'Action history: '
     before_history_tokens = toker.encode(before_history_text, add_special_tokens=False) # list of numbers
     history_tokens = []
     if need_action_history:
         history_text = game_state.action_history(history_window=HISTORY_WINDOW)
-        history_text += f" {SEP}"
+        history_text += f" {SEP} "
         history_tokens = toker.encode(history_text, add_special_tokens=False) # list of numbers
-    after_history_text = f'Available actions:\n{game_state.available_commands_text()} {SEP}'
+    after_history_text = f'Available actions:\n{game_state.available_commands_text()} {SEP} '
     after_history_tokens = toker.encode(after_history_text, add_special_tokens=False) # list of numbers
     # trim history tokens
     if len(before_history_tokens) + len(history_tokens) + len(after_history_tokens) > MAX_TOKEN_SIZE:

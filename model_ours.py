@@ -1,7 +1,7 @@
 from transformers import BertForMaskedLM, AutoTokenizer
 from functools import lru_cache
 import common_new as common
-from common_new import draw_line_chart
+from common_new import draw_line_chart, beutiful_print_command_and_probs
 import torch
 import torch.optim as optim
 from torch import nn
@@ -27,8 +27,14 @@ dbg = logger.debug
 
 # GAME_INIT_FUNC = Game_handle_recipe
 TRAIN_SPLIT = 'train_command_generate'
-SAVE_DIR = '/home/taku/Downloads/cog2019_ftwp/trained_models/roberta_ours_command_gen'
-GAME_INIT_FUNC = Game_command_generate
+PART_VALID_SPLIT = 'partial_valid'
+FULL_VALID_SPLIT = 'valid'
+TEST_SPLIT = 'test'
+PART_TEST_SPLIT = 'partial_test'
+# SAVE_DIR = '/home/taku/Downloads/cog2019_ftwp/trained_models/roberta_ours_command_gen'
+SAVE_DIR = '/home/taku/Downloads/cog2019_ftwp/trained_models/roberta_ours'
+# GAME_INIT_FUNC = Game_command_generate
+GAME_INIT_FUNC = Game_handle_recipe
 
 
 class Model(nn.Module):
@@ -102,7 +108,7 @@ class Model_ucb1(Model):
             self.state_action_count[key][action] = 0
         return self.state_action_count[key][action]
     def reset_state_action_count(self, room_name = ''):
-        dbg(f'重新开始，清空地图信息, 房间名: {room_name}')
+        dbg(f'\n\n\n === \n\n重新开始，清空地图信息, 房间名: {room_name}')
         self.world_map = {}
         self.current_room = room_name # 并不会及时反应当前房间，而是在确定发生了移动之后才会更新
         if room_name != '':
@@ -121,7 +127,7 @@ class Model_ucb1(Model):
                 assert current_room_name != '', f'当前房间名为空，action: {action}, obs: {obs}'
                 if current_room_name not in self.world_map: # 说明来到一个新的房间
                     self.world_map[current_room_name] = Room(current_room_name, None, None, None, None)
-                    dbg(f'New room: {current_room_name}, prev room: {prev_room_name}')
+                    # dbg(f'New room: {current_room_name}, prev room: {prev_room_name}')
                 # dbg(f'Update room link, action: {action}, prev room: {prev_room_name}, now room: {current_room_name}')
                 if prev_room_name not in self.world_map: # 说明为什么之前的房间会不存在？只有一种情况：在开始的第一步进行了移动
                     raise ValueError(f'Previous room {prev_room_name} not in world map, current room: {current_room_name}')
@@ -186,6 +192,11 @@ class Model_ucb1(Model):
         best_action = actions[best_action_idx]
         state_key = game_state_to_ucb1_key(game_state)
         self.incresase_state_action_count(state_key, best_action)
+        dbg(f'Recipe: {game_state.recipe_clean()}\n')
+        dbg(f'Description: {game_state.description_clean()}\n')
+        dbg(f'Inventory: {game_state.inventory_clean()}\n')
+        beutiful_print_command_and_probs(actions, action_prob, log_func=dbg)
+        dbg(f'Action: {best_action}\n\n')
         return best_action
 
 # ^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -213,7 +224,7 @@ def test2():
     return m, g, state
 
 @lru_cache(maxsize=1)
-def dataloader_get(split = 'train', batch_size = 8):
+def dataloader_get(split = TRAIN_SPLIT, batch_size = 8):
     # dataloader
     csv = read_csv_dataset(split=split)
     csv = csv.sample(frac=1) # shuffle to train
@@ -237,7 +248,7 @@ def get_writer():
     writer = SummaryWriter()
     return writer
 
-def train(model, batch_size = 8, split = 'train'):
+def train(model, batch_size = 8, split = TRAIN_SPLIT):
     train_dataloader = dataloader_get(split=split, batch_size=batch_size)
     # training
     from accelerate import Accelerator
@@ -291,23 +302,38 @@ def get_model(checkpoint_path = None, init_func = Model):
         model.load_checkpoint(checkpoint_path)
     return model
 
+
 def train_reapeat(repeat = 3, epoch = 5, batch_size = 8):
     for rp in range(repeat):
         model = get_model()
         model.prefix = f'roberta_ours_repeat_{rp}'
         for i in range(epoch):
             train(model, batch_size=batch_size, split=TRAIN_SPLIT)
-            score = valid_all(model, split='valid')
-            dbg(f'Valid results, repeat {rp} epoch {i} score: {score}')
+            score, avg_step = valid_all(model, split=FULL_VALID_SPLIT)
+            dbg(f'Full valid score ({rp}): {score}, average step {avg_step}')
             # get_writer().add_scalar(f'Score/valid_rp{rp}', score, i)
             model.save_checkpoint(base_path = SAVE_DIR, epoch=i)
 
 def test_trained():
-    best_model_index = [4,4,4]
+    best_model_index = [4,4,4] # NOTE: 对于使用引擎选项的模型
+    # best_model_index = [3,4,4] # NOTE: 对于使用生成选项的模型
     for rp in range(3):
         path = f'{SAVE_DIR}/roberta_ours_repeat_{rp}_epoch_{best_model_index[rp]}.pth'
         model = get_model(path, init_func=Model_ucb1)
-        s1, avg_step = valid_all(model, split='valid')
+        s1, avg_step = valid_all(model, split=FULL_VALID_SPLIT)
         dbg(f'Full valid score ({rp}): {s1}, average step {avg_step}')
-        s2, avg_step = valid_all(model, split='test')
+        s2, avg_step = valid_all(model, split=TEST_SPLIT)
         dbg(f'Full test score ({rp}): {s2}, average step {avg_step}')
+
+def test_normal_model(model_path = '/home/taku/Downloads/cog2019_ftwp/trained_models/roberta_ours/roberta_ours_repeat_0_epoch_4.pth'):
+    assert GAME_INIT_FUNC == Game_handle_recipe, f'模型路径 {model_path} 需要使用Game_handle_recipe'
+    model = get_model(model_path, init_func=Model_ucb1)
+    s1, avg_step = valid_all(model, split=PART_TEST_SPLIT)
+    dbg(f'Full valid score: {s1}, average step {avg_step}')
+
+
+def test_command_generate_model(model_path = '/home/taku/Downloads/cog2019_ftwp/trained_models/roberta_ours_command_gen/roberta_ours_repeat_2_epoch_4.pth'):
+    assert GAME_INIT_FUNC == Game_command_generate, f'模型路径 {model_path} 需要使用Game_command_generate'
+    model = get_model(model_path, init_func=Model_ucb1)
+    s1, avg_step = valid_all(model, split=PART_TEST_SPLIT)
+    dbg(f'Full valid score: {s1}, average step {avg_step}')

@@ -184,7 +184,7 @@ def use_bert_to_filter_command(desc_clean, gen_open_go_cmds):
     return result
 
 # vvvvvvvvvvvvvvvvvvvvvvvvvvvvv Train vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv
-# GAME_INIT_FUNC = Game_handle_recipe
+# GAME_INIT_FUNC = Game_move_action_augment
 TRAIN_SPLIT = 'train'
 PART_VALID_SPLIT = 'partial_valid'
 FULL_VALID_SPLIT = 'valid'
@@ -300,7 +300,7 @@ def train_reapeat(repeat = 1, epoch = 3, batch_size = 8):
         model.cuda()
         model.prefix = f'roberta_command_filter_{rp}'
         for i in range(epoch):
-            train(model, batch_size=batch_size, split=TRAIN_SPLIT)
+            train(model, batch_size=batch_size, split=TRAIN_SPLIT, log_name=f'{rp}')
             score, extra = valid_all_by_csv(model, split=FULL_VALID_SPLIT)
             dbg(f'Full valid score ({rp}): {score}')
             # get_writer().add_scalar(f'Score/valid_rp{rp}', score, i)

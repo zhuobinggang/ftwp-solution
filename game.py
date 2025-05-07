@@ -112,7 +112,7 @@ def default_game():
     return Game_move_action_augment('/home/taku/Downloads/cog2019_ftwp/games/valid/tw-cooking-recipe1+cook+cut+drop+go6-M2qEFeOXcol3H1ql.ulx')
 
 
-def test_game(game: Game_handle_recipe, model = Fake_model()):
+def test_game(game: Game_move_action_augment, model = Fake_model()):
     # dbg('Testing: Model eval on, model cuda on.')
     if model.training:
         model.eval()
@@ -185,9 +185,11 @@ class Game_state:
         return self.filtered_commands
     def available_commands_text(self):
         return common.actions_to_list_number(self.filtered_available_commands())
+    def __str__(self):
+        return f'Game_state(room={self.room}, description={self.description_clean()}, recipe={self.recipe_clean()}, inventory={self.inventory_clean()}, action_obs_pairs={self.action_history()}, admissible_commands={self.available_commands_text()})'
 
 
-def game_state_from_game(game: Game_handle_recipe):
+def game_state_from_game(game: Game_move_action_augment):
     state = Game_state()
     state.room = common.extract_room_name(game.info['description'])
     state.description_raw = game.info['description']

@@ -2,11 +2,13 @@ import os
 import pandas as pd
 from tqdm import tqdm
 from functools import lru_cache
-from game import Game_handle_recipe, game_state_from_game, Game_state
+from game import Game_move_action_augment, game_state_from_game, Game_state
 import common_new as common
+from common_new import COMMAND_LIST_SHUFFLE
 import logging
 logger = logging.getLogger('dataset_create_taku')
 dbg = logger.debug
+import random
 
 BASE_PATH = '/home/taku/Downloads/cog2019_ftwp/games'
 TRAIN_PATH = '/home/taku/Downloads/cog2019_ftwp/games/train'
@@ -40,7 +42,7 @@ def extract_walkthrough_dataset(split = 'fake_test', skip_bad_actions = True):
     train_games = get_cv_games(datapath, split)
     gamesteps = []
     for game_path in tqdm(train_games):
-        game = Game_handle_recipe(game_path)
+        game = Game_move_action_augment(game_path)
         game.reset()
         counter = 0
         for cmd in game.clean_walkthrough():
@@ -121,6 +123,8 @@ def row_to_game_state(row):
     game_state.recipe_good = row['recipe']
     game_state.inventory_good = row['inventory']
     game_state.available_commands_good = row['admissible_commands']
+    if COMMAND_LIST_SHUFFLE:
+        random.shuffle(game_state.available_commands_good)
     game_state.description_good = row['description']
     return game_state
 
@@ -131,7 +135,7 @@ def check_forward_backward_eual():
     idx = 0
     for group_name, df_group in csv.groupby('game_path', sort=False):
         print(f'{group_name} \n {get_game_name(game_paths[idx])}')
-        game = Game_handle_recipe(game_paths[idx])
+        game = Game_move_action_augment(game_paths[idx])
         game.reset()
         real_state = game.to_game_state()
         for row_index, row in df_group.iterrows():

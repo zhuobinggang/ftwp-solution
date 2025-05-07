@@ -2,11 +2,11 @@ import re
 import logging
 
 LOG_FILE = 'log/ours.log'
-DEBUG = True
+DEBUG = False
 if DEBUG:
     logging.basicConfig(filename=LOG_FILE, filemode='w', level=logging.DEBUG)
 else:
-    logging.basicConfig(level=logging.WARNING)
+    logging.basicConfig(filename=LOG_FILE, filemode='w', level=logging.WARNING)
 
 # NOTE: without these commands, we can still get max score
 # BUG: 注意，不能把drop去掉，因为物品栏有限制，如果不drop，会导致物品栏满了，无法继续拿东西
@@ -16,6 +16,8 @@ COMMAND_NEED_KEEP = ['examine cookbook', 'eat meal']
 # NOTE: examine cookbook and eat meal are only words start with examine and eat
 ALL_STARTWORDS = ['inventory', 'examine', 'open', 'take', 'drop', 'cook', 'slice', 'chop', 'dice', 'prepare', 'eat', 'go']
 
+# 2025.5.7 打乱命令顺序
+COMMAND_LIST_SHUFFLE = False
 
 # NOTE: inventory是默认过滤的，因为我们使用限制1，可以直接从meta data中获取inventory
 def filter_commands_default(commands, head_words = FILTER_STARTWORD_LIST, command_need_keep = COMMAND_NEED_KEEP):

@@ -1,14 +1,14 @@
 from transformers import BertForMaskedLM, AutoTokenizer
 from functools import lru_cache
 import common_new as common
-from common_new import draw_line_chart, beutiful_print_command_and_probs
+from common_new import draw_line_chart, beutiful_print_command_and_probs, COMMAND_LIST_SHUFFLE
 import torch
 import torch.optim as optim
 from torch import nn
 import re
-from game import Game_handle_recipe, game_state_from_game, Game_state, default_game, test_game
-from game_command_generate import Game_command_generate
-from dataset_create_taku import read_csv_dataset, get_cv_games
+from game import Game_move_action_augment, Game_state, default_game, test_game
+from game_command_generate import Game_command_generate_bert_filter
+from dataset_create_taku import get_cv_games
 from bert_utils import default_tokenizer, init_bert_ours, action_select_loss, action_select_loss_batched
 from bert_utils import get_next_command, tokenize_game_state, command_indexs_tokenized, to_bert_input, DEVICE
 from dataset_create_taku import row_to_game_state
@@ -18,6 +18,7 @@ import numpy as np
 from typing import List
 from torch.utils.data import (DataLoader, RandomSampler, SequentialSampler,
                               TensorDataset)
+from dataset_create_taku_command_generate import read_csv_dataset
 
 Statistic = recordclass('Statistic', 'losses')
 
@@ -25,16 +26,24 @@ import logging
 logger = logging.getLogger('model_ours')
 dbg = logger.debug
 
-# GAME_INIT_FUNC = Game_handle_recipe
-TRAIN_SPLIT = 'train_command_generate'
+# GAME_INIT_FUNC = Game_move_action_augment
+TRAIN_SPLIT = 'train'
 PART_VALID_SPLIT = 'partial_valid'
 FULL_VALID_SPLIT = 'valid'
 TEST_SPLIT = 'test'
 PART_TEST_SPLIT = 'partial_test'
-# SAVE_DIR = '/home/taku/Downloads/cog2019_ftwp/trained_models/roberta_ours_command_gen'
-SAVE_DIR = '/home/taku/Downloads/cog2019_ftwp/trained_models/roberta_ours'
-# GAME_INIT_FUNC = Game_command_generate
-GAME_INIT_FUNC = Game_handle_recipe
+# SAVE_DIR = '/home/taku/Downloads/cog2019_ftwp/trained_models/roberta_ours'
+GAME_INIT_FUNC = Game_command_generate_bert_filter
+# GAME_INIT_FUNC = Game_move_action_augment
+
+# 不打乱命令顺序
+assert COMMAND_LIST_SHUFFLE == False, '不打乱命令顺序'
+SAVE_DIR = '/home/taku/Downloads/cog2019_ftwp/trained_models/roberta_ours_command_gen_with_filter'
+BEST_MODELS = [6,5,6] 
+# 打乱命令顺序
+# assert COMMAND_LIST_SHUFFLE == True, '打乱命令顺序'
+# SAVE_DIR = '/home/taku/Downloads/cog2019_ftwp/trained_models/roberta_ours_command_gen_with_filter_shuffle_cmds'
+# BEST_MODELS = [5, 5, 7] # NOTE: 2025.5.7 
 
 
 class Model(nn.Module):
@@ -195,33 +204,12 @@ class Model_ucb1(Model):
         dbg(f'Recipe: {game_state.recipe_clean()}\n')
         dbg(f'Description: {game_state.description_clean()}\n')
         dbg(f'Inventory: {game_state.inventory_clean()}\n')
+        dbg(f'Inventory: {game_state.clean_action_obs_pairs()[-5:]}\n')
         beutiful_print_command_and_probs(actions, action_prob, log_func=dbg)
         dbg(f'Action: {best_action}\n\n')
         return best_action
 
 # ^^^^^^^^^^^^^^^^^^^^^^^^^
-
-def test():
-    m = Model()
-    g = default_game()
-    _ = g.reset()
-    g.act('go east')
-    gs = game_state_from_game(g)
-    # loss = m.loss_from_info(gs, 11)
-    # print(loss)
-    # print(m.predict(gs))
-    return m, g, gs
-
-def test2():
-    m = Model()
-    g = default_game()
-    _ = g.reset()
-    g.act('go east')
-    state = game_state_from_game(g)
-    prompt_ids = tokenize_game_state(state)
-    action_idx = 11
-    label_code_in_tokenizer = command_indexs_tokenized()[action_idx]
-    return m, g, state
 
 @lru_cache(maxsize=1)
 def dataloader_get(split = TRAIN_SPLIT, batch_size = 8):
@@ -230,7 +218,7 @@ def dataloader_get(split = TRAIN_SPLIT, batch_size = 8):
     csv = csv.sample(frac=1) # shuffle to train
     bert_inputs = []
     for row_idx, row in tqdm(csv.iterrows(), total=len(csv), desc="Dataset processing"):
-        state = row_to_game_state(row)
+        state = row_to_game_state(row, shuffle_available_commands_good=True) # NOTE: 2025.5.5 打乱以提高模型的泛化能力
         action_idx = state.filtered_available_commands().index(row['action'])
         bert_input = to_bert_input(state, action_idx)
         bert_inputs.append(bert_input)
@@ -242,13 +230,13 @@ def dataloader_get(split = TRAIN_SPLIT, batch_size = 8):
     train_dataloader = DataLoader(train_data, sampler=train_sampler, batch_size=batch_size)
     return train_dataloader
 
-@lru_cache(maxsize=1)
 def get_writer():
     from tensorboardX import SummaryWriter
     writer = SummaryWriter()
     return writer
 
-def train(model, batch_size = 8, split = TRAIN_SPLIT):
+def train(model, batch_size = 8, split = TRAIN_SPLIT, log_name = ''):
+    writer = get_writer()
     train_dataloader = dataloader_get(split=split, batch_size=batch_size)
     # training
     from accelerate import Accelerator
@@ -267,18 +255,21 @@ def train(model, batch_size = 8, split = TRAIN_SPLIT):
                    labels=label_ids.to(DEVICE))
         loss = outputs.loss
         accelerator.backward(loss)
-        get_writer().add_scalar('Loss/train', loss.item(), batch_idx)
+        writer.add_scalar(f'Loss/train_{log_name}', loss.item(), batch_idx)
         optimizer.step()
         optimizer.zero_grad()
 
-def valid_all(model: Model, split = 'partial_valid'):
+def valid_all(model: Model, split = 'partial_valid', game_init_func = None):
+    if game_init_func is None:
+        game_init_func = GAME_INIT_FUNC
+        assert GAME_INIT_FUNC == Game_command_generate_bert_filter, '默认使用bert来过滤合成的动作'
     game_paths = get_cv_games(split=split)
     score = 0
     max_score = 0
     steps = []
     dbg(f'Validating {split} games, total {len(game_paths)}')
     for game_path in tqdm(game_paths, desc=f"Validating {split} games"):
-        game = GAME_INIT_FUNC(game_path)
+        game = game_init_func(game_path)
         result = test_game(game, model)
         score += result.score
         max_score += result.max_score
@@ -300,40 +291,60 @@ def get_model(checkpoint_path = None, init_func = Model):
     model.init_bert()
     if checkpoint_path:
         model.load_checkpoint(checkpoint_path)
+    model.cuda()
     return model
 
-
-def train_reapeat(repeat = 3, epoch = 5, batch_size = 8):
+def train_repeat(repeat = 3, epoch = 8, batch_size = 8):
+    global BEST_MODELS
+    # TRAIN_SPLIT = 'fake_test'
+    # FULL_VALID_SPLIT = 'fake_test'
     for rp in range(repeat):
-        model = get_model()
+        model = get_model(init_func = Model)
         model.prefix = f'roberta_ours_repeat_{rp}'
+        max_score = 0
         for i in range(epoch):
-            train(model, batch_size=batch_size, split=TRAIN_SPLIT)
-            score, avg_step = valid_all(model, split=FULL_VALID_SPLIT)
-            dbg(f'Full valid score ({rp}): {score}, average step {avg_step}')
+            train(model, batch_size=batch_size, split=TRAIN_SPLIT, log_name=f'{rp}')
+            score, avg_step = valid_all(model, split=FULL_VALID_SPLIT, game_init_func=Game_command_generate_bert_filter)
+            logger.error(f'Full valid score ({rp}) w/o UCB1: {score}, average step {avg_step}')
+            print(f'Full valid score ({rp}) w/o UCB1: {score}, average step {avg_step}')
             # get_writer().add_scalar(f'Score/valid_rp{rp}', score, i)
+            if score > max_score:
+                max_score = score
+                BEST_MODELS[rp] = i
+                logger.error(f'Best model ({rp}) at epoch {i}, score {max_score}, average step {avg_step}. BEST_MODELS: {BEST_MODELS}')
+                # get_writer().add_scalar(f'Score/best_valid_rp{rp}', score, i)
             model.save_checkpoint(base_path = SAVE_DIR, epoch=i)
 
-def test_trained():
-    best_model_index = [4,4,4] # NOTE: 对于使用引擎选项的模型
-    # best_model_index = [3,4,4] # NOTE: 对于使用生成选项的模型
-    for rp in range(3):
-        path = f'{SAVE_DIR}/roberta_ours_repeat_{rp}_epoch_{best_model_index[rp]}.pth'
-        model = get_model(path, init_func=Model_ucb1)
-        s1, avg_step = valid_all(model, split=FULL_VALID_SPLIT)
-        dbg(f'Full valid score ({rp}): {s1}, average step {avg_step}')
-        s2, avg_step = valid_all(model, split=TEST_SPLIT)
-        dbg(f'Full test score ({rp}): {s2}, average step {avg_step}')
+def test_trained(repeat = 3):
+    INIC_FUNC = Model
+    ucb1_on = 'with UCB1' if INIC_FUNC == Model_ucb1 else 'w/o UCB1'
+    logger.error(f'vvvvv\nTesting trained models {ucb1_on}')
+    logger.error(f'Best models: {BEST_MODELS}')
+    # FULL_VALID_SPLIT = 'fake_test'
+    # TEST_SPLIT = 'fake_test'
+    for rp in range(repeat):
+        path = f'{SAVE_DIR}/roberta_ours_repeat_{rp}_epoch_{BEST_MODELS[rp]}.pth'
+        model = get_model(path, init_func=INIC_FUNC)
+        s1, avg_step = valid_all(model, split=FULL_VALID_SPLIT, game_init_func=Game_command_generate_bert_filter)
+        print(f'Full valid score ({rp}): {s1} {ucb1_on}, average step {avg_step}')
+        logger.error(f'Full valid score ({rp}): {s1} {ucb1_on}, average step {avg_step}')
+        s2, avg_step = valid_all(model, split=TEST_SPLIT, game_init_func=Game_command_generate_bert_filter)
+        print(f'Full test score ({rp}): {s2} {ucb1_on}, average step {avg_step}')
+        logger.error(f'Full test score ({rp}): {s2} {ucb1_on}, average step {avg_step}')
 
 def test_normal_model(model_path = '/home/taku/Downloads/cog2019_ftwp/trained_models/roberta_ours/roberta_ours_repeat_0_epoch_4.pth'):
-    assert GAME_INIT_FUNC == Game_handle_recipe, f'模型路径 {model_path} 需要使用Game_handle_recipe'
-    model = get_model(model_path, init_func=Model_ucb1)
-    s1, avg_step = valid_all(model, split=PART_TEST_SPLIT)
+    model = get_model(model_path, init_func=Model)
+    s1, avg_step = valid_all(model, split=PART_TEST_SPLIT, game_init_func=Game_move_action_augment)
     dbg(f'Full valid score: {s1}, average step {avg_step}')
 
 
-def test_command_generate_model(model_path = '/home/taku/Downloads/cog2019_ftwp/trained_models/roberta_ours_command_gen/roberta_ours_repeat_2_epoch_4.pth'):
-    assert GAME_INIT_FUNC == Game_command_generate, f'模型路径 {model_path} 需要使用Game_command_generate'
-    model = get_model(model_path, init_func=Model_ucb1)
-    s1, avg_step = valid_all(model, split=PART_TEST_SPLIT)
-    dbg(f'Full valid score: {s1}, average step {avg_step}')
+def test_trained_output_all():
+    path = f'{SAVE_DIR}/roberta_ours_repeat_{0}_epoch_{6}.pth'
+    model = get_model(path, init_func=Model_ucb1)
+    s1, avg_step = valid_all(model, split=PART_TEST_SPLIT, game_init_func=Game_command_generate_bert_filter)
+    logger.error(f'Part test score with UCB1 scored {s1}, average step {avg_step}')
+
+
+def night_run():
+    train_repeat(repeat=3, epoch=8, batch_size=8)
+    test_trained(repeat=3)

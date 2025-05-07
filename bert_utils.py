@@ -23,6 +23,8 @@ EMPTY_RECIPE = 'missing'
 MAX_TOKEN_SIZE = 480
 DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
 
+# LOG_PROMPT = True # bert_tokenize_prompt_cut will print the prompt
+
 @lru_cache(maxsize=1)
 def default_tokenizer():
     # return AutoTokenizer.from_pretrained(BERT_BASE_UNCASED_MODEL_ID)
@@ -171,16 +173,18 @@ def action_select_loss(bert, state:Game_state, action_idx: int):
     outputs = bert(input_ids=prompt_ids.to(DEVICE), labels=labels.to(DEVICE))
     return outputs.loss
 
-def to_bert_input(state: Game_state, action_idx: int):
+# NOTE: 使用CLS token作为解码token
+def to_bert_input(state: Game_state, action_idx: int, need_padding = True):
     prompt_ids = bert_tokenize_prompt_cut(state) # (length)
     attention_mask = [1] * len(prompt_ids)
-    if len(prompt_ids) < MAX_TOKEN_SIZE:
+    if need_padding and len(prompt_ids) < MAX_TOKEN_SIZE:
         pad_size = MAX_TOKEN_SIZE - len(prompt_ids)
         prompt_ids += [default_tokenizer().pad_token_id] * pad_size
         attention_mask += [0] * pad_size
-    assert len(prompt_ids) == MAX_TOKEN_SIZE, f"prompt_ids length {len(prompt_ids)} != {MAX_TOKEN_SIZE}"
+    if need_padding:
+        assert len(prompt_ids) == MAX_TOKEN_SIZE, f"prompt_ids length {len(prompt_ids)} != {MAX_TOKEN_SIZE}"
     # prompt_ids = torch.tensor(prompt_ids).unsqueeze(0) # (1, length)
-    labels = [-100] * MAX_TOKEN_SIZE
+    labels = [-100] * MAX_TOKEN_SIZE if need_padding else [-100] * len(prompt_ids)
     labels[0] = command_indexs_tokenized()[action_idx]
     return BertInput(
         input_ids = prompt_ids,
@@ -210,11 +214,16 @@ def get_cls_output(model, x):
 
 
 def get_command_logits_simple(model, state: Game_state, from_cls = True):
+    commands = state.filtered_available_commands()
+    if len(commands) == 0:
+        logger.error(f'No available commands, WHY? Game state:')
+        logger.error(str(state))
+        return None
     if not from_cls:
         mask_logits = get_mask_logits_simple(model, state) # (1, 50368)
     else:
         mask_logits = get_cls_logits_simple(model, state) # (1, 50368)
-    command_length = len(state.filtered_available_commands())
+    command_length = len(commands)
     command_indexs = command_indexs_tokenized()[:command_length]
     command_logits = mask_logits[command_indexs] # (command_length)
     return command_logits # (command_length)

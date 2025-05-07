@@ -60,6 +60,16 @@ def create_csv_dataset(outputpath = 'good_dataset', suffix = '_command_generate'
         df.to_csv(os.path.join(outputpath,
                         f'walkthrough_{split}{suffix}.csv'), index=False)
         
+def read_csv_dataset(inputpath = 'good_dataset', split = 'fake_test', suffix = '_command_generate'):
+    path = os.path.join(inputpath,
+                        f'walkthrough_{split}{suffix}.csv')
+    print(path)
+    df= pd.read_csv(path)
+    df['action_obs_pairs'] = df['action_obs_pairs'].apply(eval)
+    df['admissible_commands'] = df['admissible_commands'].apply(eval)
+    df['recipe'] = df['recipe'].fillna('')
+    df['inventory'] = df['inventory'].fillna('')
+    return df
 
 # vvvvvvvvvvvvvvvvvvvvvvvvvvvvvv generate open & go commands filter dataset vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv
 

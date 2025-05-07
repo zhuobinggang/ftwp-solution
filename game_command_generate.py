@@ -1,6 +1,7 @@
 from game import Game_move_action_augment
 from dataset_create_taku import get_cv_games
 import common_new as common
+from common_new import COMMAND_LIST_SHUFFLE
 import logging
 import re
 from tqdm import tqdm
@@ -8,6 +9,7 @@ from fasttext_classifier import is_openable_entity
 from bert_command_filter import use_bert_to_filter_command, PredictResult
 from game import Game_state
 from bert_utils import bert_prompt_from_game_state
+import random
 
 class Fake_logger:
     def debug(self, msg):
@@ -142,7 +144,7 @@ class Game_command_generate(Game_move_action_augment):
         entities_to_take = self.info['entities']
         if COOK_COMMAND_RESTRICT:
             entities_to_take = self.filter_enetities_in_ingredients(self.info['entities'])
-            entities_to_take = entities_to_take + ['knife']
+            entities_to_take = entities_to_take + ['knife', 'meal']
         # 判断环境中是否有这些物品
         entities_to_take = self.entities_in_description(candidate_entities=entities_to_take)
         return [f'take {entity}' for entity in entities_to_take]
@@ -210,6 +212,8 @@ class Game_command_generate_bert_filter(Game_command_generate):
         open_go_commands = self.use_bert_filter(common.description_simplify(self.info['description']), open_go_commands)
         all_commands = cook_commands + knife_commands + take_commands + drop_commands + \
             open_go_commands + prepare_meal_commands + eat_commands + examine_cookbook
+        if COMMAND_LIST_SHUFFLE:
+            random.shuffle(all_commands) # NOTE: 2025.5.5 打乱以提高模型的泛化能力
         return all_commands
     def use_bert_filter(self, desc_clean, open_go_commands):
         predict_result = use_bert_to_filter_command(desc_clean, open_go_commands)

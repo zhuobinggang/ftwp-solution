@@ -21,7 +21,7 @@ KITCHENWARES = ['oven', 'stove', 'BBQ']
 COOK_COMMAND_RESTRICT = True # True的情况，如果库存和食谱中有相同的物品，才会生成cook命令
 CUT_COMMANDS = ['slice', 'chop', 'dice']
 
-
+assert COMMAND_LIST_SHUFFLE == True, '打乱命令顺序'
 
 
 class Game_command_generate(Game_move_action_augment):

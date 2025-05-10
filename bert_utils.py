@@ -13,7 +13,7 @@ dbg = logger.debug
 
 NextCommandResult = recordclass('NextCommandResult', 'index command logits distribution')
 SpecialTokens = recordclass('SpecialTokens', 'cls sep pad mask unk')
-BertInput = recordclass('BertInput', 'input_ids attention_mask labels')
+BertInput = recordclass('BertInput', 'input_ids attention_mask labels token_type_ids')
 
 BERT_BASE_UNCASED_MODEL_ID = 'bert-base-uncased'
 ROBERTA_BASE_UNCASED_MODEL_ID = 'FacebookAI/roberta-base'

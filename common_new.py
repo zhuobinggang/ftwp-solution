@@ -17,7 +17,7 @@ COMMAND_NEED_KEEP = ['examine cookbook', 'eat meal']
 ALL_STARTWORDS = ['inventory', 'examine', 'open', 'take', 'drop', 'cook', 'slice', 'chop', 'dice', 'prepare', 'eat', 'go']
 
 # 2025.5.7 打乱命令顺序
-COMMAND_LIST_SHUFFLE = False
+COMMAND_LIST_SHUFFLE = True
 
 # NOTE: inventory是默认过滤的，因为我们使用限制1，可以直接从meta data中获取inventory
 def filter_commands_default(commands, head_words = FILTER_STARTWORD_LIST, command_need_keep = COMMAND_NEED_KEEP):

@@ -15,7 +15,7 @@ TRAIN_PATH = '/home/taku/Downloads/cog2019_ftwp/games/train'
 TEST_PATH = '/home/taku/Downloads/cog2019_ftwp/games/test'
 VALID_PATH = '/home/taku/Downloads/cog2019_ftwp/games/valid'
 
-
+assert COMMAND_LIST_SHUFFLE == True, 'COMMAND_LIST_SHUFFLE must be True to make the dataset more robust'
 
 
 @lru_cache(maxsize=None)

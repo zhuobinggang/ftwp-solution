@@ -37,14 +37,18 @@ GAME_INIT_FUNC = Game_command_generate_bert_filter
 # GAME_INIT_FUNC = Game_move_action_augment
 
 # 不打乱命令顺序
-assert COMMAND_LIST_SHUFFLE == False, '不打乱命令顺序'
-SAVE_DIR = '/home/taku/Downloads/cog2019_ftwp/trained_models/roberta_ours_command_gen_with_filter'
-BEST_MODELS = [6,5,6] 
+# assert COMMAND_LIST_SHUFFLE == False, '不打乱命令顺序'
+# SAVE_DIR = '/home/taku/Downloads/cog2019_ftwp/trained_models/roberta_ours_command_gen_with_filter'
+# BEST_MODELS = [6,5,6] 
 # 打乱命令顺序
 # assert COMMAND_LIST_SHUFFLE == True, '打乱命令顺序'
 # SAVE_DIR = '/home/taku/Downloads/cog2019_ftwp/trained_models/roberta_ours_command_gen_with_filter_shuffle_cmds'
 # BEST_MODELS = [5, 5, 7] # NOTE: 2025.5.7 
 
+# 测试learning rate == 1e-5
+assert COMMAND_LIST_SHUFFLE == True, '打乱命令顺序'
+SAVE_DIR = '/home/taku/Downloads/cog2019_ftwp/trained_models/roberta_ours_command_gen_with_filter_shuffle_cmds_tr_1e5'
+BEST_MODELS = [3, 2, 3]
 
 class Model(nn.Module):
     def __init__(self):
@@ -218,7 +222,7 @@ def dataloader_get(split = TRAIN_SPLIT, batch_size = 8):
     csv = csv.sample(frac=1) # shuffle to train
     bert_inputs = []
     for row_idx, row in tqdm(csv.iterrows(), total=len(csv), desc="Dataset processing"):
-        state = row_to_game_state(row, shuffle_available_commands_good=True) # NOTE: 2025.5.5 打乱以提高模型的泛化能力
+        state = row_to_game_state(row) # NOTE: 2025.5.5 打乱以提高模型的泛化能力
         action_idx = state.filtered_available_commands().index(row['action'])
         bert_input = to_bert_input(state, action_idx)
         bert_inputs.append(bert_input)
@@ -244,7 +248,7 @@ def train(model, batch_size = 8, split = TRAIN_SPLIT, log_name = ''):
     # model.cuda()
     model.train()
     dbg('Model train on.')
-    optimizer = optim.AdamW(model.parameters(), lr=2e-5) # 从1e-3到2e-5
+    optimizer = optim.AdamW(model.parameters(), lr=1e-5) # 从1e-3到2e-5
     model, optimizer, train_dataloader = accelerator.prepare(
         model, optimizer, train_dataloader
     )
@@ -313,10 +317,14 @@ def train_repeat(repeat = 3, epoch = 8, batch_size = 8):
                 BEST_MODELS[rp] = i
                 logger.error(f'Best model ({rp}) at epoch {i}, score {max_score}, average step {avg_step}. BEST_MODELS: {BEST_MODELS}')
                 # get_writer().add_scalar(f'Score/best_valid_rp{rp}', score, i)
+                # 补上测试分数
+                score, avg_step = valid_all(model, split=TEST_SPLIT, game_init_func=Game_command_generate_bert_filter)
+                logger.error(f'Full test score ({rp}) w/o UCB1: {score}, average step {avg_step}')
+                print(f'Full test score ({rp}) w/o UCB1: {score}, average step {avg_step}')
             model.save_checkpoint(base_path = SAVE_DIR, epoch=i)
 
 def test_trained(repeat = 3):
-    INIC_FUNC = Model
+    INIC_FUNC = Model_ucb1
     ucb1_on = 'with UCB1' if INIC_FUNC == Model_ucb1 else 'w/o UCB1'
     logger.error(f'vvvvv\nTesting trained models {ucb1_on}')
     logger.error(f'Best models: {BEST_MODELS}')

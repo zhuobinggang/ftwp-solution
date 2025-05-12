@@ -112,7 +112,7 @@ def default_game():
     return Game_move_action_augment('/home/taku/Downloads/cog2019_ftwp/games/valid/tw-cooking-recipe1+cook+cut+drop+go6-M2qEFeOXcol3H1ql.ulx')
 
 
-def test_game(game: Game_move_action_augment, model = Fake_model()):
+def test_game(game: Game_move_action_augment, model = Fake_model(), max_step = 100):
     # dbg('Testing: Model eval on, model cuda on.')
     if model.training:
         model.eval()
@@ -122,7 +122,7 @@ def test_game(game: Game_move_action_augment, model = Fake_model()):
         dbg('Model cuda on.')
     obs, info = game.reset()
     counter = 0
-    while counter < 100:
+    while counter < max_step:
         counter += 1
         game_state = game_state_from_game(game)
         game_state.admissible_commands = game.get_admissible_commands() # BUG: 如果在game_state_from_game中调用这个会导致无限循环

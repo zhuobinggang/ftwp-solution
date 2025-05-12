@@ -354,5 +354,5 @@ def test_trained_output_all():
 
 
 def night_run():
-    train_repeat(repeat=3, epoch=8, batch_size=8)
+    train_repeat(repeat=3, epoch=5, batch_size=8)
     test_trained(repeat=3)

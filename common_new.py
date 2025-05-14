@@ -1,8 +1,16 @@
 import re
 import logging
 
-LOG_FILE = 'log/ours.log'
-DEBUG = False
+def get_time_str():
+    from datetime import datetime
+    # get time now
+    dt = datetime.now()
+    # format it to a string
+    return dt.strftime('%Y%m%d_%H%M%S')
+
+LOG_FILE = f'log/log_{get_time_str()}.log'
+
+DEBUG = True
 if DEBUG:
     logging.basicConfig(filename=LOG_FILE, filemode='w', level=logging.DEBUG)
 else:
@@ -79,12 +87,6 @@ def save_pickle_file(filepath, dic):
     with open(filepath, 'wb') as outp:  # Overwrites any existing file.
         pickle.dump(dic, outp, pickle.HIGHEST_PROTOCOL)
 
-def get_time_str():
-    from datetime import datetime
-    # get time now
-    dt = datetime.now()
-    # format it to a string
-    return dt.strftime('%Y%m%d_%H%M%S')
 
 def action_history_to_reward_by_step(act_string):
     acts = act_string.split('Action ')

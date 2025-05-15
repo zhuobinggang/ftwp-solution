@@ -16,7 +16,9 @@ from torch import nn, optim
 from functools import lru_cache
 import numpy as np
 from recordclass import recordclass
-BEST_MODELS = [0,0,0]
+from pydash.arrays import chunk
+
+BEST_MODELS = [4, 4, 2]
 SAVE_DIR = '/home/taku/Downloads/cog2019_ftwp/trained_models/roberta_theirs'
 TRAIN_SPLIT = 'train'
 # PART_VALID_SPLIT = 'partial_valid'
@@ -113,7 +115,7 @@ def dataloader_get(split = 'train', batch_size = 8):
     train_dataloader = DataLoader(train_data, sampler=train_sampler, batch_size=batch_size)
     return train_dataloader
 
-def get_next_command(bert, game_state: Game_state):
+def get_next_command_do_not_use(bert, game_state: Game_state):
         # 对于每一个action，计算它的概率
         commands = game_state.filtered_available_commands()
         bert_inputs = []
@@ -141,6 +143,37 @@ def get_next_command(bert, game_state: Game_state):
         result = NextCommandResult(command_index, max_prob_command, command_probs)
         return result
 
+@torch.no_grad()
+def batch_predict(bert, batch_bert_input):
+    input_ids = torch.tensor([bert_input.input_ids for bert_input in batch_bert_input], dtype=torch.long).to(DEVICE)
+    attention_mask = torch.tensor([bert_input.attention_mask for bert_input in batch_bert_input], dtype=torch.long).to(DEVICE)
+    # NOTE: 2025.5.11 RoBERTa don't use token_type_ids! Error happens if use it!
+    # token_type_ids = torch.tensor([bert_input.token_type_ids for bert_input in batch_bert_input], dtype=torch.long).to(DEVICE)
+    outputs = bert(input_ids=input_ids, attention_mask=attention_mask)
+    logits = outputs.logits
+    cls_token_index = 0
+    logits = logits[:, cls_token_index] # (batch_size, 30522)
+    command_length = 2 # 0 or 1
+    command_indexs = command_indexs_tokenized()[:command_length]
+    command_logits = logits[:, command_indexs] # (batch_size, 2)
+    return command_logits.softmax(dim=1)[:, 1].tolist() # probabilities of positive class
+
+def get_next_command_batch(bert, game_state: Game_state, batch_size = 8):
+        # 对于每一个action，计算它的概率
+        commands = game_state.filtered_available_commands()
+        bert_inputs = []
+        for command in commands:
+            bert_input = to_bert_input_theirs(game_state, command, positive=True, need_padding=True)
+            bert_inputs.append(bert_input)
+        command_probs = []
+        for batch_bert_input in chunk(bert_inputs, batch_size):
+            command_probs += batch_predict(bert, batch_bert_input)
+        command_index = np.argmax(command_probs)
+        max_prob_command = commands[command_index]
+        # beutiful_print_command_and_probs(commands, command_probs)
+        result = NextCommandResult(command_index, max_prob_command, command_probs)
+        return result
+
 class Model(nn.Module):
     def __init__(self):
         super(Model, self).__init__()
@@ -151,7 +184,7 @@ class Model(nn.Module):
         if not self.bert:
             self.bert = init_bert_ours()
     def predict(self, game_state:Game_state): # @return: action
-        result = get_next_command(self.bert, game_state)
+        result = get_next_command_batch(self.bert, game_state)
         return result.command
     def save_checkpoint(self, base_path = 'log', epoch = -1):
         path = f'{base_path}/{self.prefix}_epoch_{epoch}.pth'
@@ -287,7 +320,7 @@ class Model_ucb1(Model):
         masked_state_action_executed_count = self.calculated_state_action_count(game_state)
         # NOTE: 获取logits并使用ucb1算法选择动作
         actions = game_state.filtered_available_commands()
-        result = get_next_command(self.bert, game_state)
+        result = get_next_command_batch(self.bert, game_state)
         logits = result.logits # (actions_length)
         logits = torch.tensor(logits).to(DEVICE)
         best_action_idx, action_prob = choose_action_ubc1(logits, masked_state_action_executed_count)
@@ -400,7 +433,7 @@ def get_model(checkpoint_path = None, init_func = Model):
     return model
 
 def test_trained(repeat = 3):
-    INIC_FUNC = Model_ucb1
+    INIC_FUNC = Model
     ucb1_on = 'with UCB1' if INIC_FUNC == Model_ucb1 else 'w/o UCB1'
     logger.error(f'vvvvv\nTesting trained models {ucb1_on}')
     logger.error(f'Best models: {BEST_MODELS}')

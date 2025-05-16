@@ -8,3 +8,4 @@ twc_games
 *\.log
 *\.heart
 *\.pth
+\.~*

@@ -122,16 +122,22 @@ def test_game(game: Game_move_action_augment, model = Fake_model(), max_step = 1
         dbg('Model cuda on.')
     obs, info = game.reset()
     counter = 0
+    final_action = ''
     while counter < max_step:
         counter += 1
         game_state = game_state_from_game(game)
         game_state.admissible_commands = game.get_admissible_commands() # BUG: 如果在game_state_from_game中调用这个会导致无限循环
         action = model.predict(game_state)
         obs, reward, done, info = game.act(action)
+        final_action = action
         if done:
             break
     # result = (counter, info['score'], info['max_score'], info)
     dbg(f'Game done: {info["score"]} / {info["max_score"]}, steps {counter}, won: {info["won"]}, lost: {info["lost"]}, path: {game.game_path}')
+    if info['lost']:
+        from model_danger_command import use_bert_to_identify_danger_command
+        is_danger = use_bert_to_identify_danger_command(game_state.recipe_clean(), final_action, logging=True)
+        logger.warning(f'Game lost: final action: {final_action}, is_danger: {is_danger}')
     result = TestResult(counter, info['score'], info['max_score'], info)
     return result
 

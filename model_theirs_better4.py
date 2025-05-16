@@ -1,6 +1,4 @@
-# 2025.5.15 Navigate by dfs to the kitchen: 1) if the game starts, and I am not in the kitchen, then dfs until be in the kitchen. 
-# 实验结果： 比不使用dfs导航低0.1个点
-# TODO: dataset generation
+# 2025.5.16 在训练好的模型的基础上改善ucb1逻辑，使用model_danger_command.py来判断危险指令，对于危险指令，我们将其设定为执行过一次
 from game_command_generate import Game_command_generate_bert_filter, default_game
 from dataset_create_taku import row_to_game_state, get_cv_games
 from dataset_create_taku_command_generate import read_csv_dataset
@@ -11,7 +9,7 @@ from game import Game_state, test_game
 from common_new import logging, beutiful_print_command_and_probs
 from bert_utils import default_tokenizer, special_tokens_dict, EMPTY_RECIPE, EMPTY_INVENTORY
 from bert_utils import BertInput, command_indexs_tokenized, init_bert_ours, DEVICE, NextCommandResult
-logger = logging.getLogger('导航到厨房')
+logger = logging.getLogger('model_theirs')
 import torch
 from torch.utils.data import DataLoader, RandomSampler, TensorDataset
 from torch import nn, optim
@@ -19,6 +17,7 @@ from functools import lru_cache
 import numpy as np
 from recordclass import recordclass
 from pydash.arrays import chunk
+from model_danger_command import use_bert_to_identify_danger_command, MAYBE_DANGER_COMMAND_PREFIX
 
 BEST_MODELS = [4, 4, 2]
 SAVE_DIR = '/home/taku/Downloads/cog2019_ftwp/trained_models/roberta_theirs'
@@ -160,21 +159,20 @@ def batch_predict(bert, batch_bert_input):
     command_logits = logits[:, command_indexs] # (batch_size, 2)
     return command_logits.softmax(dim=1)[:, 1].tolist() # probabilities of positive class
 
-def get_next_command_batch(bert, game_state: Game_state, batch_size = 8):
-        # 对于每一个action，计算它的概率
-        commands = game_state.filtered_available_commands()
-        bert_inputs = []
-        for command in commands:
-            bert_input = to_bert_input_theirs(game_state, command, positive=True, need_padding=True)
-            bert_inputs.append(bert_input)
-        command_probs = []
-        for batch_bert_input in chunk(bert_inputs, batch_size):
-            command_probs += batch_predict(bert, batch_bert_input)
-        command_index = np.argmax(command_probs)
-        max_prob_command = commands[command_index]
-        # beutiful_print_command_and_probs(commands, command_probs)
-        result = NextCommandResult(command_index, max_prob_command, command_probs)
-        return result
+def get_next_command_batch(bert, game_state: Game_state, commands, batch_size = 8):
+    # 对于每一个action，计算它的概率
+    bert_inputs = []
+    for command in commands:
+        bert_input = to_bert_input_theirs(game_state, command, positive=True, need_padding=True)
+        bert_inputs.append(bert_input)
+    command_probs = []
+    for batch_bert_input in chunk(bert_inputs, batch_size):
+        command_probs += batch_predict(bert, batch_bert_input)
+    command_index = np.argmax(command_probs)
+    max_prob_command = commands[command_index]
+    # beutiful_print_command_and_probs(commands, command_probs)
+    result = NextCommandResult(command_index, max_prob_command, command_probs)
+    return result
 
 class Model(nn.Module):
     def __init__(self):
@@ -186,7 +184,7 @@ class Model(nn.Module):
         if not self.bert:
             self.bert = init_bert_ours()
     def predict(self, game_state:Game_state): # @return: action
-        result = get_next_command_batch(self.bert, game_state)
+        result = get_next_command_batch(self.bert, game_state, game_state.filtered_available_commands())
         return result.command
     def save_checkpoint(self, base_path = 'log', epoch = -1):
         path = f'{base_path}/{self.prefix}_epoch_{epoch}.pth'
@@ -244,7 +242,7 @@ class Model_ucb1(Model):
             self.state_action_count[key][action] = 0
         return self.state_action_count[key][action]
     def reset_state_action_count(self, room_name = ''):
-        logger.debug(f'清空状态动作计数器')
+        logger.debug(f'\n\n\n === \n\n重新开始，清空地图信息, 房间名: {room_name}')
         self.world_map = {}
         self.current_room = room_name # 并不会及时反应当前房间，而是在确定发生了移动之后才会更新
         if room_name != '':
@@ -285,10 +283,9 @@ class Model_ucb1(Model):
                 else:
                     logger.error(f'XXXXXXXXXXXXXX错误状况XXXXXXXXXXXXXX')
         self.current_room = game_state.room # 总是要更新当前房间，但是在更新之前需要先更新世界地图（如果有必要）
-    def calculated_state_action_count(self, game_state: Game_state):
+    def calculated_state_action_count(self, game_state: Game_state, actions):
         # NOTE: 使用move_action_mask来促进模型探索新的房间
         state_key = game_state_to_ucb1_key(game_state)
-        actions = game_state.filtered_available_commands()
         state_action_executed_count = [self.get_state_action_count(state_key, action) for action in actions]
         # 通过mask来屏蔽掉已经知道的房间
         state_action_executed_count_mask = [0] * len(actions)
@@ -316,97 +313,48 @@ class Model_ucb1(Model):
                 pass
         masked_state_action_executed_count = [a + b for a, b in zip(state_action_executed_count, state_action_executed_count_mask)]
         return masked_state_action_executed_count
-    def is_new_game(self, game_state: Game_state):
-        action_obs_pairs = game_state.clean_action_obs_pairs()
-        return len(action_obs_pairs) == 0
-    def is_in_kitchen(self, game_state: Game_state):
-        return game_state.room.lower().strip() == 'kitchen'
-    def dfs_to_kitchen(self, game_state: Game_state):
-        # 如果有东西没打开，就先打开东西
-        if game_state.room not in self.executed_open_commands_map:
-            self.executed_open_commands_map[game_state.room] = []
-        for command in game_state.filtered_available_commands():
-            if command.startswith('open '):
-                if command not in self.executed_open_commands_map[game_state.room]:
-                    self.executed_open_commands_map[game_state.room].append(command)
-                    return command
-                else:
-                    logger.debug(f'已经执行过打开指令: {command}')
-                    continue
-        # go-able actions
-        go_actions = [action for action in game_state.filtered_available_commands() if action.startswith('go ')]
-        dfs_order = ['go east', 'go south', 'go west', 'go north']
-        back_action_map = {
-                'go east': 'go west',
-                'go west': 'go east',
-                'go north': 'go south',
-                'go south': 'go north'
-            }
-        if game_state.room not in self.dfs_map: # 新房间，go action生效了，或者是出生点
-            self.dfs_map[game_state.room] = {'visited_actions': [], 'back_action': None}
-            if self.prev_go_action:
-                self.dfs_map[game_state.room]['back_action'] = back_action_map[self.prev_go_action]
-        else: # 旧房间。可能是倒回去的，也可能是循环探索抵达的，后者需要直接返回
-            if self.room_in_stack[-1] == game_state.room: # 说明是倒回去的
-                self.room_in_stack.pop()
-            else: # 说明是循环探索抵达的，直接返回
-                logger.warning(f'循环探索抵达的房间: {game_state.room}, 直接返回')
-                return back_action_map[self.prev_go_action]
-        dfs_info = self.dfs_map[game_state.room]
-        visited_actions = dfs_info['visited_actions']
-        back_action = dfs_info['back_action']
-        for action in dfs_order:
-            if action not in go_actions:
-                continue
-            if action in visited_actions:
-                continue
-            if back_action is not None and action == back_action:
-                continue
-            # 说明这个方向是可以走的
-            # 记录back_action & visited_actions
-            self.dfs_map[game_state.room]['visited_actions'].append(action)
-            self.prev_go_action = action
-            self.room_in_stack.append(game_state.room)
-            return action
-        if back_action is not None:
-            return back_action
+    def danger_action_mask(self, game_state: Game_state, actions):
+        danger_action_mask = [0] * len(actions)
+        # NOTE: 2025.5.16 使用bert来判断危险指令
+        recip_text = game_state.recipe_clean().strip()
+        if recip_text == '':
+            return danger_action_mask
+        for idx, action in enumerate(actions):
+            prefix = action.split()[0]
+            if prefix in MAYBE_DANGER_COMMAND_PREFIX:
+                if use_bert_to_identify_danger_command(recip_text, action):
+                    # logger.debug(f'Action {action} is dangerous. I will mark it as executed.')
+                    danger_action_mask[idx] = 1
+        return danger_action_mask
     def predict(self, game_state:Game_state):
-        if self.is_new_game(game_state):
-            self.is_navigating_to_kitchen = True
-            self.prev_go_action = ''
-            self.dfs_map = {}
-            self.room_in_stack = []
-            self.executed_open_commands_map = {}
-            logger.debug(f'\n\n\n === \n\n新游戏，开始导航到厨房, 房间名: {game_state.room}')
-        if self.is_navigating_to_kitchen and self.is_in_kitchen(game_state): # 第一次进入厨房
-            logger.debug(f'找到厨房，停止导航')
-            self.is_navigating_to_kitchen = False
-            self.reset_state_action_count(game_state.room)
-        if self.is_navigating_to_kitchen: # 还没到厨房
-            action = self.dfs_to_kitchen(game_state)
-            logger.debug(f'导航中，当前房间: {game_state.room}, 准备执行指令: {action}')
-            return action
-        else: # 非导航状态
-            # NOTE: 更新世界地图(根据上一步动作的结果)，只要发生移动必须对链接进行更新
-            self.update_room_link(game_state)
-            masked_state_action_executed_count = self.calculated_state_action_count(game_state)
-            # NOTE: 获取logits并使用ucb1算法选择动作
-            actions = game_state.filtered_available_commands()
-            result = get_next_command_batch(self.bert, game_state)
-            logits = result.logits # (actions_length)
-            logits = torch.tensor(logits).to(DEVICE)
-            best_action_idx, action_prob = choose_action_ubc1(logits, masked_state_action_executed_count)
-            best_action = actions[best_action_idx]
-            state_key = game_state_to_ucb1_key(game_state)
-            self.incresase_state_action_count(state_key, best_action)
-            if False:
-                logger.debug(f'Recipe: {game_state.recipe_clean()}\n')
-                logger.debug(f'Description: {game_state.description_clean()}\n')
-                logger.debug(f'Inventory: {game_state.inventory_clean()}\n')
-                logger.debug(f'Inventory: {game_state.clean_action_obs_pairs()[-5:]}\n')
-                beutiful_print_command_and_probs(actions, action_prob, log_func=logger.debug)
-                logger.debug(f'Action: {best_action}\n\n')
-            return best_action
+        # NOTE: 更新世界地图(根据上一步动作的结果)，只要发生移动必须对链接进行更新
+        all_actions = game_state.filtered_available_commands()
+        self.update_room_link(game_state)
+        masked_state_action_executed_count = self.calculated_state_action_count(game_state, all_actions)
+        # NOTE: 2025.5.16 使用bert来判断危险指令
+        danger_action_mask = self.danger_action_mask(game_state, all_actions)
+        masked_state_action_executed_count = [a + b for a, b in zip(masked_state_action_executed_count, danger_action_mask)]
+        # NOTE: 获取logits并使用ucb1算法选择动作
+        result = get_next_command_batch(self.bert, game_state, all_actions)
+        logits = result.logits # (actions_length)
+        logits = torch.tensor(logits).to(DEVICE)
+        best_action_idx, action_prob = choose_action_ubc1(logits, masked_state_action_executed_count)
+        best_action = all_actions[best_action_idx]
+        # 如果模型选择的动作是危险指令，debug
+        if True:
+            model_choice_index = logits.argmax().item()
+            if danger_action_mask[model_choice_index] == 1:
+                logger.warning(f'Action {all_actions[model_choice_index]} is dangerous. I marked it as executed. Final action: {best_action}')
+        state_key = game_state_to_ucb1_key(game_state)
+        self.incresase_state_action_count(state_key, best_action)
+        if False:
+            logger.debug(f'Recipe: {game_state.recipe_clean()}\n')
+            logger.debug(f'Description: {game_state.description_clean()}\n')
+            logger.debug(f'Inventory: {game_state.inventory_clean()}\n')
+            logger.debug(f'Inventory: {game_state.clean_action_obs_pairs()[-5:]}\n')
+            beutiful_print_command_and_probs(actions, action_prob, log_func=logger.debug)
+            logger.debug(f'Action: {best_action}\n\n')
+        return best_action
 
 
 def train(model, batch_size = 8, split = 'train', log_name = ''):
@@ -514,9 +462,9 @@ def test_trained(repeat = 3):
     for rp in range(repeat):
         path = f'{SAVE_DIR}/roberta_theirs_repeat_{rp}_epoch_{BEST_MODELS[rp]}.pth'
         model = get_model(path, init_func=INIC_FUNC)
-        s1, avg_step = valid_all(model, split=VALID_SPLIT, game_init_func=Game_command_generate_bert_filter)
-        print(f'Full valid score ({rp}): {s1} {ucb1_on}, average step {avg_step}')
-        logger.error(f'Full valid score ({rp}): {s1} {ucb1_on}, average step {avg_step}')
+        # s1, avg_step = valid_all(model, split=VALID_SPLIT, game_init_func=Game_command_generate_bert_filter)
+        # print(f'Full valid score ({rp}): {s1} {ucb1_on}, average step {avg_step}')
+        # logger.error(f'Full valid score ({rp}): {s1} {ucb1_on}, average step {avg_step}')
         s2, avg_step = valid_all(model, split=TEST_SPLIT, game_init_func=Game_command_generate_bert_filter)
         print(f'Full test score ({rp}): {s2} {ucb1_on}, average step {avg_step}')
         logger.error(f'Full test score ({rp}): {s2} {ucb1_on}, average step {avg_step}')

@@ -213,8 +213,7 @@ def get_cls_output(model, x):
     return cls_out
 
 
-def get_command_logits_simple(model, state: Game_state, from_cls = True):
-    commands = state.filtered_available_commands()
+def get_command_logits_simple(model, state: Game_state, commands, from_cls = True):
     if len(commands) == 0:
         logger.error(f'No available commands, WHY? Game state:')
         logger.error(str(state))
@@ -239,8 +238,8 @@ def test():
     state = game.to_game_state()
     return model.bert, state
 
-def get_command_distribution_simple(model, state: Game_state):
-    command_logits = get_command_logits_simple(model, state)
+def get_command_distribution_simple(model, state: Game_state, commands):
+    command_logits = get_command_logits_simple(model, state, commands)
     # print(command_logits) # NOTE: TESTING
     command_logits[command_logits < 0] = 0 # 出现负数无法用于建构distribution，会报错，因此直接设置为0即可
     import torch
@@ -249,18 +248,18 @@ def get_command_distribution_simple(model, state: Game_state):
 
 
 # 拥有探索性
-def get_next_command_by_distribution(model, state: Game_state):
-    dist = get_command_distribution_simple(model, state)
+def get_next_command_by_distribution(model, state: Game_state, commands):
+    dist = get_command_distribution_simple(model, state, commands)
     command_index = dist.sample().item()
-    command = state.filtered_available_commands()[command_index]
+    command = commands[command_index]
     results = NextCommandResult(command_index, command, distribution=dist)
     return results
 
 
 # 贪婪
-def get_next_command(model, state: Game_state):
-    command_logits = get_command_logits_simple(model, state) # (command_length)
+def get_next_command(model, state: Game_state, commands):
+    command_logits = get_command_logits_simple(model, state, commands) # (command_length)
     command_index = command_logits.argmax().item()
-    command = state.filtered_available_commands()[command_index]
+    command = commands[command_index]
     results = NextCommandResult(command_index, command, command_logits)
     return results

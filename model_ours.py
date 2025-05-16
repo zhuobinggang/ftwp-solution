@@ -64,7 +64,8 @@ class Model(nn.Module):
     def loss_from_state_batched(self, states:List[Game_state], action_idxs:List[int]):
         return action_select_loss_batched(self.bert, states, action_idxs)
     def predict(self, game_state:Game_state):
-        result = get_next_command(self.bert, game_state)
+        commands = game_state.filtered_available_commands()
+        result = get_next_command(self.bert, game_state, commands)
         return result.command
     def save_checkpoint(self, base_path = 'log', epoch = -1):
         path = f'{base_path}/{self.prefix}_epoch_{epoch}.pth'
@@ -162,10 +163,9 @@ class Model_ucb1(Model):
                 else:
                     logger.error(f'XXXXXXXXXXXXXX错误状况XXXXXXXXXXXXXX')
         self.current_room = game_state.room # 总是要更新当前房间，但是在更新之前需要先更新世界地图（如果有必要）
-    def calculated_state_action_count(self, game_state: Game_state):
+    def calculated_state_action_count(self, game_state: Game_state, actions):
         # NOTE: 使用move_action_mask来促进模型探索新的房间
         state_key = game_state_to_ucb1_key(game_state)
-        actions = game_state.filtered_available_commands()
         state_action_executed_count = [self.get_state_action_count(state_key, action) for action in actions]
         # 通过mask来屏蔽掉已经知道的房间
         state_action_executed_count_mask = [0] * len(actions)
@@ -194,12 +194,12 @@ class Model_ucb1(Model):
         masked_state_action_executed_count = [a + b for a, b in zip(state_action_executed_count, state_action_executed_count_mask)]
         return masked_state_action_executed_count
     def predict(self, game_state:Game_state):
+        actions = game_state.filtered_available_commands()
         # NOTE: 更新世界地图(根据上一步动作的结果)，只要发生移动必须对链接进行更新
         self.update_room_link(game_state)
-        masked_state_action_executed_count = self.calculated_state_action_count(game_state)
+        masked_state_action_executed_count = self.calculated_state_action_count(game_state, actions)
         # NOTE: 获取logits并使用ucb1算法选择动作
-        actions = game_state.filtered_available_commands()
-        result = get_next_command(self.bert, game_state)
+        result = get_next_command(self.bert, game_state, actions)
         logits = result.logits # (actions_length)
         best_action_idx, action_prob = choose_action_ubc1(logits, masked_state_action_executed_count)
         best_action = actions[best_action_idx]
@@ -302,15 +302,17 @@ def train_repeat(repeat = 3, epoch = 8, batch_size = 8):
     global BEST_MODELS
     # TRAIN_SPLIT = 'fake_test'
     # FULL_VALID_SPLIT = 'fake_test'
+    MODEL_INIT_FUNC = Model
     for rp in range(repeat):
-        model = get_model(init_func = Model)
+        model = get_model(init_func = MODEL_INIT_FUNC)
         model.prefix = f'roberta_ours_repeat_{rp}'
         max_score = 0
+        using_ucb1 = 'with UCB1' if MODEL_INIT_FUNC == Model_ucb1 else 'w/o UCB1'
         for i in range(epoch):
             train(model, batch_size=batch_size, split=TRAIN_SPLIT, log_name=f'{rp}')
             score, avg_step = valid_all(model, split=FULL_VALID_SPLIT, game_init_func=Game_command_generate_bert_filter)
-            logger.error(f'Full valid score ({rp}) w/o UCB1: {score}, average step {avg_step}')
-            print(f'Full valid score ({rp}) w/o UCB1: {score}, average step {avg_step}')
+            logger.error(f'Full valid score ({rp}) {using_ucb1}: {score}, average step {avg_step}')
+            print(f'Full valid score ({rp}) {using_ucb1}: {score}, average step {avg_step}')
             # get_writer().add_scalar(f'Score/valid_rp{rp}', score, i)
             if score > max_score:
                 max_score = score
@@ -319,8 +321,8 @@ def train_repeat(repeat = 3, epoch = 8, batch_size = 8):
                 # get_writer().add_scalar(f'Score/best_valid_rp{rp}', score, i)
                 # 补上测试分数
                 score, avg_step = valid_all(model, split=TEST_SPLIT, game_init_func=Game_command_generate_bert_filter)
-                logger.error(f'Full test score ({rp}) w/o UCB1: {score}, average step {avg_step}')
-                print(f'Full test score ({rp}) w/o UCB1: {score}, average step {avg_step}')
+                logger.error(f'Full test score ({rp}) {using_ucb1}: {score}, average step {avg_step}')
+                print(f'Full test score ({rp}) {using_ucb1}: {score}, average step {avg_step}')
             model.save_checkpoint(base_path = SAVE_DIR, epoch=i)
 
 def test_trained(repeat = 3):

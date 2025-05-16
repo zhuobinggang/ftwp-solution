@@ -48,7 +48,7 @@ GAME_INIT_FUNC = Game_command_generate_bert_filter
 # 测试learning rate == 1e-5
 assert COMMAND_LIST_SHUFFLE == True, '打乱命令顺序'
 SAVE_DIR = '/home/taku/Downloads/cog2019_ftwp/trained_models/roberta_ours_command_gen_with_filter_shuffle_cmds_tr_1e5'
-BEST_MODELS = [3, 2, 3]
+BEST_MODELS = [0,0,0]
 
 class Model(nn.Module):
     def __init__(self):

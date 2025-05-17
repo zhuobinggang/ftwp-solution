@@ -1,4 +1,4 @@
-# 2025.5.17 基于最新的模型。使用navigator来准备训练集 + 训练cogniAgent模型
+# 2025.5.16 在训练好的模型的基础上改善ucb1逻辑，使用model_danger_command.py来判断危险指令，对于危险指令，我们将其设定为执行过一次
 from game_command_generate import Game_command_generate_bert_filter, default_game
 from dataset_create_taku import row_to_game_state, get_cv_games
 from dataset_create_taku_command_generate import read_csv_dataset

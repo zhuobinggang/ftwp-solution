@@ -36,6 +36,9 @@ PART_TEST_SPLIT = 'partial_test'
 GAME_INIT_FUNC = Game_command_generate_bert_filter
 # GAME_INIT_FUNC = Game_move_action_augment
 
+# TRAIN_SPLIT = 'fake_test'
+# FULL_VALID_SPLIT = 'fake_test'
+
 # 不打乱命令顺序
 # assert COMMAND_LIST_SHUFFLE == False, '不打乱命令顺序'
 # SAVE_DIR = '/home/taku/Downloads/cog2019_ftwp/trained_models/roberta_ours_command_gen_with_filter'
@@ -354,6 +357,9 @@ def test_trained_output_all():
     s1, avg_step = valid_all(model, split=PART_TEST_SPLIT, game_init_func=Game_command_generate_bert_filter)
     logger.error(f'Part test score with UCB1 scored {s1}, average step {avg_step}')
 
+def night_run_test():
+    train_repeat(repeat=2, epoch=2, batch_size=8)
+    test_trained(repeat=2)
 
 def night_run():
     train_repeat(repeat=3, epoch=5, batch_size=8)

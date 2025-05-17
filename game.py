@@ -88,6 +88,7 @@ class Game_handle_recipe(Game_with_history):
     def get_admissible_commands(self):
         return common.filter_commands_default(self.info['admissible_commands'])
     
+    
 # NOTE: 在移动命令被执行后，obs改为prev_room to current_room。这样能够给模型一个直观的记忆。因为在prompt中没有上一个房间的信息，应该很有帮助。
 class Game_move_action_augment(Game_handle_recipe):
     def act(self, action):
@@ -108,8 +109,64 @@ class Game_move_action_augment(Game_handle_recipe):
         self.obs = obs
         return self.obs, self.reward, self.done, self.info
     
+
+class Game_handle_worldmap(Game_move_action_augment):
+    def __init__(self, game_path):
+        super().__init__(game_path)
+        self.worldMap = {}
+        self.itemMap = {}
+    def reset(self):
+        self.obs, self.info = self.env.reset()
+        if True: # 初始化第一个房间
+            room_name = common.extract_room_name(self.info['description'])
+            self.worldMap[room_name] = {}
+        return self.obs, self.info
+    def act(self, action):
+        # 这里处理移动命令
+        if action.startswith('go'):
+            prev_room = common.extract_room_name(self.info['description'])
+            self.obs_raw, self.reward, self.done, self.info = self.env.step(action)
+            current_room = common.extract_room_name(self.info['description'])
+            obs = f'From {prev_room} to {current_room}.'
+            if True: # 更新worldMap 
+                if prev_room not in self.worldMap:
+                    self.worldMap[prev_room] = {}
+                if current_room not in self.worldMap:
+                    self.worldMap[current_room] = {}
+                direction = action.split()[1]
+                op_direction = common.get_opposite_direction(direction)
+                self.worldMap[prev_room][direction] = current_room
+                self.worldMap[current_room][op_direction] = prev_room
+        else:
+            self.obs_raw, self.reward, self.done, self.info = self.env.step(action)
+            obs = self.obs_raw
+        # obs simplify
+        if action == 'examine cookbook' and common.is_recipe_feedback(obs):
+            self.recipe_raw = common.extract_recipe(obs, need_clean=False)
+            self.recipe = common.extract_recipe(self.recipe_raw, need_clean=True)
+        self.action_obs_pairs.append((action, obs)) # 不在这里处理，而是放到game_state中处理
+        self.obs = obs
+        if True: # NOTE: 每一步根据环境描述来更新itemMap
+            # 每一步根据recipe & 环境描述来更新itemList。item包含字段：room。
+            entities = self.info['entities']
+            for entity in entities:
+                if common.whole_word_inside(entity, self.info['description']):
+                    if entity not in self.itemMap:
+                        self.itemMap[entity] = {'room': ''}
+                    room_name = common.extract_room_name(self.info['description'])
+                    if room_name != self.itemMap[entity]['room']:
+                        # logger.debug(f'Update itemMap: {entity} from {self.itemMap[entity]["room"]} to {room_name}')
+                        pass
+                    self.itemMap[entity]['room'] = room_name
+                if common.whole_word_inside(entity, self.info['inventory']):
+                    if entity not in self.itemMap:
+                        self.itemMap[entity] = {'room': ''}
+                    self.itemMap[entity]['room'] = 'inventory'
+        return self.obs, self.reward, self.done, self.info
+
+    
 def default_game():
-    return Game_move_action_augment('/home/taku/Downloads/cog2019_ftwp/games/valid/tw-cooking-recipe1+cook+cut+drop+go6-M2qEFeOXcol3H1ql.ulx')
+    return Game_handle_worldmap('/home/taku/Downloads/cog2019_ftwp/games/valid/tw-cooking-recipe1+cook+cut+drop+go6-M2qEFeOXcol3H1ql.ulx')
 
 
 def test_game(game: Game_move_action_augment, model = Fake_model(), max_step = 100):
@@ -162,6 +219,7 @@ class Game_state:
         self.action_obs_pairs = []
         self.admissible_commands = []
         self.filtered_commands = None
+        self.worldMap = {}
     def recipe_clean(self):
         if self.recipe_raw == '':
             return ''
@@ -195,14 +253,17 @@ class Game_state:
         return f'Game_state(room={self.room}, description={self.description_clean()}, recipe={self.recipe_clean()}, inventory={self.inventory_clean()}, action_obs_pairs={self.action_history()}, admissible_commands={self.available_commands_text()})'
 
 
-def game_state_from_game(game: Game_move_action_augment):
+def game_state_from_game(game: Game_handle_worldmap, need_admissible_commands = True):
     state = Game_state()
     state.room = common.extract_room_name(game.info['description'])
     state.description_raw = game.info['description']
     state.recipe_raw = game.recipe_raw
     state.inventory_raw = game.info['inventory']
     state.action_obs_pairs = game.action_obs_pairs
-    state.admissible_commands = game.get_admissible_commands() # NOTE: 4.21 Game将代理取得可能选项
+    if need_admissible_commands:
+        state.admissible_commands = game.get_admissible_commands() # NOTE: 4.21 Game将代理取得可能选项
+    if hasattr(game, 'worldMap'):
+        state.worldMap = game.worldMap
     return state
 
 

@@ -1,4 +1,5 @@
-from game import Game_move_action_augment
+from game import Game_handle_worldmap
+import game as game_classic
 from dataset_create_taku import get_cv_games
 import common_new as common
 from common_new import COMMAND_LIST_SHUFFLE
@@ -24,7 +25,7 @@ CUT_COMMANDS = ['slice', 'chop', 'dice']
 assert COMMAND_LIST_SHUFFLE == True, '打乱命令顺序'
 
 
-class Game_command_generate(Game_move_action_augment):
+class Game_command_generate(Game_handle_worldmap):
     
     def get_admissible_commands(self):
         return self.filtered_available_commands()
@@ -239,13 +240,8 @@ def print_prompt(game: Game_command_generate_bert_filter):
 
 
 def game_state_from_game(game: Game_command_generate):
-    state = Game_state()
-    state.room = common.extract_room_name(game.info['description'])
-    state.description_raw = game.info['description']
-    state.recipe_raw = game.recipe_raw
-    state.inventory_raw = game.info['inventory']
-    state.action_obs_pairs = game.action_obs_pairs
-    # state.admissible_commands = game.get_admissible_commands() # NOTE: 4.21 Game将代理取得可能选项
+    state = game_classic.game_state_from_game(game, need_admissible_commands=False) # 如果这里需要admissible_commands，会导致死循环
+    state.admissible_commands = None # 以防万一
     return state
 
 # ============================================================

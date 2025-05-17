@@ -27,6 +27,15 @@ ALL_STARTWORDS = ['inventory', 'examine', 'open', 'take', 'drop', 'cook', 'slice
 # 2025.5.7 打乱命令顺序
 COMMAND_LIST_SHUFFLE = True
 
+OPPOSITE_DIRECTIONS = {
+    'north': 'south',
+    'south': 'north',
+    'east': 'west',
+    'west': 'east',
+    'up': 'down',
+    'down': 'up'
+}
+
 # NOTE: inventory是默认过滤的，因为我们使用限制1，可以直接从meta data中获取inventory
 def filter_commands_default(commands, head_words = FILTER_STARTWORD_LIST, command_need_keep = COMMAND_NEED_KEEP):
     word_list = head_words
@@ -352,27 +361,9 @@ def inventory_text_as_set(inventory_text):
         inventory = set()
     return inventory
 
+
 def get_opposite_direction(direction):
-    """
-    获取给定方向的相反方向。
-
-    Args:
-        direction (str): 方向。
-
-    Returns:
-        str: 给定方向的相反方向。
-    """
-    # 定义方向的相反方向
-    opposite_directions = {
-        'north': 'south',
-        'south': 'north',
-        'east': 'west',
-        'west': 'east',
-        'up': 'down',
-        'down': 'up'
-    }
-    # 返回相反方向
-    return opposite_directions.get(direction, None)
+    return OPPOSITE_DIRECTIONS.get(direction, None)
 
 def handle_inventory_text(inventory_text):
     string_set = inventory_text_as_set(inventory_text)

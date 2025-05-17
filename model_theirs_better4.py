@@ -244,45 +244,11 @@ class Model_ucb1(Model):
         return self.state_action_count[key][action]
     def reset_state_action_count(self, room_name = ''):
         logger.debug(f'\n\n\n === \n\n重新开始，清空地图信息, 房间名: {room_name}')
-        self.world_map = {}
-        self.current_room = room_name # 并不会及时反应当前房间，而是在确定发生了移动之后才会更新
-        if room_name != '':
-            self.world_map[room_name] = Room(room_name, None, None, None, None)
         self.state_action_count = {} # 记录每个状态下的动作选择次数
-    def update_room_link(self, game_state: Game_state):
+    def reset_state_action_count_if_need(self, game_state: Game_state):
         action_obs_pairs = game_state.clean_action_obs_pairs()
         if len(action_obs_pairs) == 0:
             self.reset_state_action_count(game_state.room)
-        else:
-            action, obs = action_obs_pairs[-1]
-            if action.startswith('go '): # NOTE: Update current room, and connecting rooms
-                prev_room_name = self.current_room
-                assert prev_room_name != '', f'先前房间名为空，action: {action}, obs: {obs}'
-                current_room_name = game_state.room
-                assert current_room_name != '', f'当前房间名为空，action: {action}, obs: {obs}'
-                if current_room_name not in self.world_map: # 说明来到一个新的房间
-                    self.world_map[current_room_name] = Room(current_room_name, None, None, None, None)
-                    # dbg(f'New room: {current_room_name}, prev room: {prev_room_name}')
-                # dbg(f'Update room link, action: {action}, prev room: {prev_room_name}, now room: {current_room_name}')
-                if prev_room_name not in self.world_map: # 说明为什么之前的房间会不存在？只有一种情况：在开始的第一步进行了移动
-                    raise ValueError(f'Previous room {prev_room_name} not in world map, current room: {current_room_name}')
-                prev_room_object = self.world_map[prev_room_name]
-                # 更新链接 NOTE: 需要更新反向的链接
-                current_room_object = self.world_map[current_room_name]
-                if action == 'go east':
-                    prev_room_object.east = current_room_name
-                    current_room_object.west = prev_room_name
-                elif action == 'go west':
-                    prev_room_object.west = current_room_name
-                    current_room_object.east = prev_room_name
-                elif action == 'go north':
-                    prev_room_object.north = current_room_name
-                    current_room_object.south = prev_room_name
-                elif action == 'go south':
-                    prev_room_object.south = current_room_name
-                    current_room_object.north = prev_room_name
-                else:
-                    logger.error(f'XXXXXXXXXXXXXX错误状况XXXXXXXXXXXXXX')
         self.current_room = game_state.room # 总是要更新当前房间，但是在更新之前需要先更新世界地图（如果有必要）
     def calculated_state_action_count(self, game_state: Game_state, actions):
         # NOTE: 使用move_action_mask来促进模型探索新的房间
@@ -291,14 +257,14 @@ class Model_ucb1(Model):
         # 通过mask来屏蔽掉已经知道的房间
         state_action_executed_count_mask = [0] * len(actions)
         all_direction_known = True
-        room_object = self.world_map[game_state.room]
+        room_object = game_state.worldMap[game_state.room]
         direction_count = 0
         for idx, (action, executed_count) in enumerate(zip(actions, state_action_executed_count)):
             if action.startswith('go '):
                 direction_count += 1
                 direction = action.replace('go ', '')
                 # dbg(f'Room {game_state.room} Dcirection {direction} exist, executed {executed_count} times.')
-                if getattr(room_object, direction) is None: # 未知房间
+                if direction not in room_object: # 未知房间
                     all_direction_known = False
                     # dbg(f'Room {game_state.room} Dcirection {direction} unknown.')
                 elif executed_count == 0: # 知道房间存在，但是没有真正执行过
@@ -330,7 +296,7 @@ class Model_ucb1(Model):
     def predict(self, game_state:Game_state):
         # NOTE: 更新世界地图(根据上一步动作的结果)，只要发生移动必须对链接进行更新
         all_actions = game_state.filtered_available_commands()
-        self.update_room_link(game_state)
+        self.reset_state_action_count_if_need(game_state)
         masked_state_action_executed_count = self.calculated_state_action_count(game_state, all_actions)
         if DANGER_FILTER_ON: # NOTE: 2025.5.16 使用bert来判断危险指令
             danger_action_mask = self.danger_action_mask(game_state, all_actions)

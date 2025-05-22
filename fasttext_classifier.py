@@ -90,7 +90,7 @@ def is_openable_entity(word):
     openable_centroid, unopenable_centroid = get_centroids_from_file_if_possible()
     openable_similarity = cosine_similarity(word_vector, openable_centroid)
     unopenable_similarity = cosine_similarity(word_vector, unopenable_centroid)
-    log_if_never(word, openable_similarity, unopenable_similarity)
+    # log_if_never(word, openable_similarity, unopenable_similarity)
     if openable_similarity > unopenable_similarity:
         return True
     else:

@@ -428,12 +428,12 @@ def test_trained(repeat = 3):
     for rp in range(repeat):
         path = f'{SAVE_DIR}/roberta_theirs_repeat_{rp}_epoch_{BEST_MODELS[rp]}.pth'
         model = get_model(path, init_func=INIC_FUNC)
-        # s1, avg_step = valid_all(model, split=VALID_SPLIT, game_init_func=Game_command_generate_bert_filter)
-        # print(f'Full valid score ({rp}): {s1} {ucb1_on}, average step {avg_step}')
-        # logger.error(f'Full valid score ({rp}): {s1} {ucb1_on}, average step {avg_step}')
-        s2, avg_step = valid_all(model, split=TEST_SPLIT, game_init_func=Game_command_generate_bert_filter)
-        print(f'Full test score ({rp}): {s2} {ucb1_on}, average step {avg_step}')
-        logger.error(f'Full test score ({rp}): {s2} {ucb1_on}, average step {avg_step}')
+        s1, avg_step = valid_all(model, split=VALID_SPLIT, game_init_func=Game_command_generate_bert_filter)
+        print(f'Full valid score ({rp}): {s1} {ucb1_on}, average step {avg_step}')
+        logger.error(f'Full valid score ({rp}): {s1} {ucb1_on}, average step {avg_step}')
+        # s2, avg_step = valid_all(model, split=TEST_SPLIT, game_init_func=Game_command_generate_bert_filter)
+        # print(f'Full test score ({rp}): {s2} {ucb1_on}, average step {avg_step}')
+        # logger.error(f'Full test score ({rp}): {s2} {ucb1_on}, average step {avg_step}')
 
 
 def night_run():

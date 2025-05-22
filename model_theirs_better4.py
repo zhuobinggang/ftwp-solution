@@ -1,6 +1,7 @@
-# 2025.5.17 基于最新的模型。使用navigator来准备训练集 + 训练cogniAgent模型
-from game_command_generate import Game_command_generate_bert_filter, default_game
-from dataset_create_taku import row_to_game_state, get_cv_games
+# 2025.5.17 基于最新的模型danger filter。使用navigator来准备训练集 + 训练cogniAgent模型
+# 2025.5.16 在训练好的模型的基础上改善ucb1逻辑，使用model_danger_command.py来判断危险指令，对于危险指令，我们将其设定为执行过一次
+from game_command_generate import Game_command_generate_bert_filter_with_navigator, default_game
+from dataset_create_taku import row_to_game_state, get_cv_games, get_game_name
 from dataset_create_taku_command_generate import read_csv_dataset
 import re
 import pandas as pd
@@ -18,9 +19,16 @@ import numpy as np
 from recordclass import recordclass
 from pydash.arrays import chunk
 from model_danger_command import use_bert_to_identify_danger_command, MAYBE_DANGER_COMMAND_PREFIX
+import random
+import os
+
+CSV_SUFFIX = '_command_generate_navigator' # NOTE: 2025.5.19 使用navigator生成的数据集
 
 BEST_MODELS = [4, 4, 2]
-SAVE_DIR = '/home/taku/Downloads/cog2019_ftwp/trained_models/roberta_theirs'
+SAVE_DIR = '/home/taku/Downloads/cog2019_ftwp/trained_models/roberta_theirs_danger_filter_navigator'
+# TODO: check dir exist
+if not os.path.exists(SAVE_DIR):
+    os.makedirs(SAVE_DIR)
 TRAIN_SPLIT = 'train'
 # PART_VALID_SPLIT = 'partial_valid'
 VALID_SPLIT = 'valid'
@@ -37,7 +45,7 @@ DANGER_FILTER_ON = True
 # TEST_SPLIT = 'fake_test'
 # MAX_TEST_STEP = 10
 
-GAME_INIT_FUNC = Game_command_generate_bert_filter
+GAME_INIT_FUNC = Game_command_generate_bert_filter_with_navigator
 
 def get_writer():
     from tensorboardX import SummaryWriter
@@ -95,7 +103,7 @@ def to_bert_input_theirs(state: Game_state, action: str, positive = True, need_p
 
 @lru_cache(maxsize=1)
 def dataloader_get(split = 'train', batch_size = 8):
-    csv = read_csv_dataset(split = split)
+    csv = read_csv_dataset(split = split, suffix=CSV_SUFFIX)
     csv = csv.sample(frac=1)
     bert_inputs = []
     for row_idx, row in tqdm(csv.iterrows(), total=len(csv), desc="Dataset processing"):
@@ -350,9 +358,11 @@ def train(model, batch_size = 8, split = 'train', log_name = ''):
         optimizer.zero_grad()
 
 def train_repeat(repeat = 3, epoch = 8, batch_size = 8):
-    global BEST_MODELS
+    global BEST_MODELS, MAX_TEST_STEP
     # TRAIN_SPLIT = 'fake_test'
-    # FULL_VALID_SPLIT = 'fake_test'
+    # VALID_SPLIT = 'fake_test'
+    # TEST_SPLIT = 'fake_test'
+    # MAX_TEST_STEP = 10
     INIC_FUNC = Model_ucb1
     ucb1_on = 'with UCB1' if INIC_FUNC == Model_ucb1 else 'w/o UCB1'
     for rp in range(repeat):
@@ -361,7 +371,7 @@ def train_repeat(repeat = 3, epoch = 8, batch_size = 8):
         max_score = 0
         for i in range(epoch):
             train(model, batch_size=batch_size, split=TRAIN_SPLIT, log_name=f'{rp}')
-            score, avg_step = valid_all(model, split=VALID_SPLIT, game_init_func=Game_command_generate_bert_filter)
+            score, avg_step = valid_all(model, split=VALID_SPLIT, game_init_func=GAME_INIT_FUNC)
             logger.error(f'Full valid score ({rp}) {ucb1_on}: {score}, average step {avg_step}')
             print(f'Full valid score ({rp}) {ucb1_on}: {score}, average step {avg_step}')
             # get_writer().add_scalar(f'Score/valid_rp{rp}', score, i)
@@ -371,7 +381,7 @@ def train_repeat(repeat = 3, epoch = 8, batch_size = 8):
                 logger.error(f'Best model ({rp}) at epoch {i}, score {max_score}, average step {avg_step}. BEST_MODELS: {BEST_MODELS}')
                 # get_writer().add_scalar(f'Score/best_valid_rp{rp}', score, i)
                 # 补上测试分数
-                score, avg_step = valid_all(model, split=TEST_SPLIT, game_init_func=Game_command_generate_bert_filter)
+                score, avg_step = valid_all(model, split=TEST_SPLIT, game_init_func=GAME_INIT_FUNC)
                 logger.error(f'Full test score ({rp}) {ucb1_on}: {score}, average step {avg_step}')
                 print(f'Full test score ({rp}) {ucb1_on}: {score}, average step {avg_step}')
             model.save_checkpoint(base_path = SAVE_DIR, epoch=i)
@@ -393,7 +403,7 @@ def test_script():
 def valid_all(model: Model, split = 'partial_valid', game_init_func = None):
     if game_init_func is None:
         game_init_func = GAME_INIT_FUNC
-        assert GAME_INIT_FUNC == Game_command_generate_bert_filter, '默认使用bert来过滤合成的动作'
+        assert GAME_INIT_FUNC == Game_command_generate_bert_filter_with_navigator, '默认使用bert来过滤合成的动作'
     game_paths = get_cv_games(split=split)
     score = 0
     max_score = 0
@@ -431,7 +441,7 @@ def test_trained(repeat = 3):
         # s1, avg_step = valid_all(model, split=VALID_SPLIT, game_init_func=Game_command_generate_bert_filter)
         # print(f'Full valid score ({rp}): {s1} {ucb1_on}, average step {avg_step}')
         # logger.error(f'Full valid score ({rp}): {s1} {ucb1_on}, average step {avg_step}')
-        s2, avg_step = valid_all(model, split=TEST_SPLIT, game_init_func=Game_command_generate_bert_filter)
+        s2, avg_step = valid_all(model, split=TEST_SPLIT, game_init_func=GAME_INIT_FUNC)
         print(f'Full test score ({rp}): {s2} {ucb1_on}, average step {avg_step}')
         logger.error(f'Full test score ({rp}): {s2} {ucb1_on}, average step {avg_step}')
 
@@ -439,3 +449,121 @@ def test_trained(repeat = 3):
 def night_run():
     train_repeat(repeat=3, epoch=5, batch_size=8)
     # test_trained(repeat=3)
+
+
+# ==================== 2025.5.19 为navigator准备数据集 ====================
+
+def get_clean_clean_walkthrough(game_path):
+    from game_command_generate import game_state_from_game
+    game = GAME_INIT_FUNC(game_path)
+    game.reset()
+    clean_walkthrough = game.clean_walkthrough()
+    clean_clean_walkthrough = []
+    for cmd in clean_walkthrough:
+        if game.done:
+            break
+        # 过滤掉不好的动作
+        admissible_commands = game.filtered_available_commands()
+        if cmd.startswith('take'):
+            cmd = re.sub(r'\sfrom.*$', '', cmd)
+        if cmd not in admissible_commands:
+            if cmd == 'eat meal':
+                # logger.debug(f'Eat meal not in admissible_commands, I will add it to make sure the game can done.')
+                admissible_commands.append(cmd)
+            else:
+                # logger.error(f'Command {cmd} not in {admissible_commands}, I will skip it.')
+                continue
+        clean_clean_walkthrough.append(cmd)
+        game.act(cmd)
+    assert game.done
+    return clean_clean_walkthrough
+
+def extract_walkthrough_dataset_with_navigator(split = 'fake_test', test_game_path = ''):
+    from game_command_generate import game_state_from_game
+    assert GAME_INIT_FUNC == Game_command_generate_bert_filter_with_navigator, 'We need to use Game_command_generate_bert_filter to generate the dataset.'
+    if test_game_path:
+        train_games = [test_game_path]
+    else:
+        train_games = get_cv_games(split = split)
+    gamesteps = []
+    for game_path in tqdm(train_games):
+        clean_walkthrough = get_clean_clean_walkthrough(game_path)
+        if test_game_path:
+            print(f'clean walkthrough: {clean_walkthrough}')
+        cmd_index = 0
+        game = GAME_INIT_FUNC(game_path)
+        game.reset()
+        while cmd_index < len(clean_walkthrough):
+            cmd = clean_walkthrough[cmd_index]
+            if game.done:
+                break
+            game_state = game_state_from_game(game)
+            admissible_commands = game.filtered_available_commands()
+            if cmd == 'eat meal': # 修正admissible_commands
+                # logger.debug(f'Eat meal not in admissible_commands, I will add it to make sure the game can done.')
+                admissible_commands.append(cmd)
+            game_step = {
+                'game_path': get_game_name(game_path),
+                'room': game_state.room,
+                'step': game.info['moves'], # NOTE: 这里的step是游戏中的步数
+                'action': cmd, # NOTE: 会被导航后下一个动作覆盖
+                'action_obs_pairs': game_state.clean_action_obs_pairs(),
+                'recipe': game_state.recipe_clean(),
+                'inventory': game_state.inventory_clean(),
+                'admissible_commands': admissible_commands,
+                'description': game_state.description_clean(),
+                'won': game.info['won'],
+                'lost': game.info['lost'],
+                'score': game.info['score'],
+                # 'entities': game.info['entities'],
+                'max_score': game.info['max_score'],
+            }
+            need_no_execute = False
+            need_no_append_gamesteps = False
+            if cmd.startswith('go'): # 导航到物品
+                next_non_go_index = cmd_index + 1
+                while next_non_go_index < len(clean_walkthrough) and clean_walkthrough[next_non_go_index].startswith('go'):
+                    next_non_go_index += 1
+                non_go_command = clean_walkthrough[next_non_go_index]
+                entity = None
+                if non_go_command.startswith('take'):
+                    entity = non_go_command.split()[1]
+                elif non_go_command.startswith('cook'):
+                    entity = non_go_command.split()[-1]
+                if entity and entity in game.itemMap: # 可以导航到物品
+                    need_no_execute = True # 导航在这个代码快中执行
+                    prev_room = game_state.room
+                    navigate_action = f'navigate to {entity}'
+                    clean_navigate_commands = []
+                    if navigate_action not in admissible_commands: # 可能出现循环导航，可以直接省略
+                        print(f'{game_state.room}, {game.itemMap[entity]["room"]}')
+                        if game_state.room == game.itemMap[entity]['room']:
+                            logger.warning('循环导航，省略当前指令，不需要置入数据集')
+                            need_no_append_gamesteps = True
+                        else:
+                            raise ValueError(f'Command {game_step["action"]} not in {admissible_commands}, current room {game_state.room}, game path {game_path}, itemMap {game.itemMap}')
+                    else:
+                        game_step['action'] = navigate_action # 覆盖动作
+                        clean_navigate_commands = game.navigate_to_item(entity)
+                        for command in clean_navigate_commands:
+                            game.act(command)
+                    # 导航执行完毕，获取了新的state信息，置入gamesteps
+                    game_state = game_state_from_game(game)
+                    logger.debug(f'Navigate to {entity}, {prev_room} -> {game_state.room}, paths: {clean_navigate_commands}')
+                    logger.debug(game_path)
+                    cmd = non_go_command
+                    cmd_index = next_non_go_index
+            if not need_no_append_gamesteps:
+                gamesteps.append(game_step)
+            if not need_no_execute:
+                game.act(cmd) # 执行的可能是导航后的下一个指令
+                cmd_index += 1
+        assert game.done
+    return pd.DataFrame(gamesteps)
+
+def create_csv_dataset(outputpath = 'good_dataset'):
+    import os
+    for split in ['valid', 'test', 'train', 'fake_test']:
+        df = extract_walkthrough_dataset_with_navigator(split)
+        df.to_csv(os.path.join(outputpath,
+                        f'walkthrough_{split}_command_generate_navigator.csv'), index=False)

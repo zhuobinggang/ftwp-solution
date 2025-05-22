@@ -109,12 +109,45 @@ class Game_move_action_augment(Game_handle_recipe):
         self.obs = obs
         return self.obs, self.reward, self.done, self.info
     
+def bfs_search(start, goal, worldMap):
+    queue = [(start, [])]
+    visited = set()
+    while queue:
+        current_room, path = queue.pop(0)
+        if current_room == goal:
+            return path
+        visited.add(current_room)
+        for direction, next_room in worldMap[current_room].items():
+            if next_room not in visited:
+                queue.append((next_room, path + [direction]))
+    return []
+
+def directions_to_action(directions):
+    return ['go ' + direction for direction in directions]
 
 class Game_handle_worldmap(Game_move_action_augment):
     def __init__(self, game_path):
         super().__init__(game_path)
         self.worldMap = {}
         self.itemMap = {}
+    def navigate_to_item(self, itemName):
+        item = self.itemMap[itemName]
+        if item['room'] == 'inventory':
+            logger.warning(f'Item {itemName} is in inventory, cannot navigate to it.')
+            return []
+        target_room = item['room']
+        if target_room not in self.worldMap:
+            logger.error(f'Item {itemName} is in unknown room {target_room}.')
+            return []
+        return self.navigate_to_room(target_room)
+    def navigate_to_room(self, target_room):
+        current_room = common.extract_room_name(self.info['description'])
+        path = bfs_search(current_room, target_room, self.worldMap)
+        if len(path) == 0:
+            logger.error(f'Cannot find path from {current_room} to {target_room}.')
+            return []
+        else:
+            return directions_to_action(path)
     def reset(self):
         self.obs, self.info = self.env.reset()
         if True: # 初始化第一个房间
@@ -128,7 +161,9 @@ class Game_handle_worldmap(Game_move_action_augment):
             self.obs_raw, self.reward, self.done, self.info = self.env.step(action)
             current_room = common.extract_room_name(self.info['description'])
             obs = f'From {prev_room} to {current_room}.'
-            if True: # 更新worldMap 
+            if prev_room == current_room:
+                logger.warning(f'Action {action} should not happen, prev_room == current_room: {prev_room}')
+            elif True: # 更新worldMap 
                 if prev_room not in self.worldMap:
                     self.worldMap[prev_room] = {}
                 if current_room not in self.worldMap:
@@ -137,6 +172,20 @@ class Game_handle_worldmap(Game_move_action_augment):
                 op_direction = common.get_opposite_direction(direction)
                 self.worldMap[prev_room][direction] = current_room
                 self.worldMap[current_room][op_direction] = prev_room
+        elif action.startswith('navigate to '):
+            prev_room = common.extract_room_name(self.info['description'])
+            entity_or_room = action.replace('navigate to ', '')
+            path = []
+            if entity_or_room in self.itemMap:
+                target_room = self.itemMap[entity_or_room]['room']
+                path = self.navigate_to_room(target_room)
+            elif entity_or_room in self.worldMap:
+                target_room = entity_or_room
+                path = self.navigate_to_room(target_room)
+            for temp_action in path: # 导航到目标房间
+                self.obs_raw, self.reward, self.done, self.info = self.env.step(temp_action)
+            obs = f'Navigate from {prev_room} to {target_room}.'
+            logger.debug(f'{obs}, path: {path}')
         else:
             self.obs_raw, self.reward, self.done, self.info = self.env.step(action)
             obs = self.obs_raw
@@ -181,11 +230,13 @@ def test_game(game: Game_move_action_augment, model = Fake_model(), max_step = 1
     counter = 0
     final_action = ''
     while counter < max_step:
-        counter += 1
         game_state = game_state_from_game(game)
         game_state.admissible_commands = game.get_admissible_commands() # BUG: 如果在game_state_from_game中调用这个会导致无限循环
         action = model.predict(game_state)
+        prev_moves = game.info['moves']
         obs, reward, done, info = game.act(action)
+        current_moves = info['moves']
+        counter += max(1, current_moves - prev_moves) # 考虑到可能的多步行动（比如高级命令）
         final_action = action
         if done:
             break

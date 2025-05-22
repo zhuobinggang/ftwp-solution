@@ -161,7 +161,7 @@ class Game_command_generate(Game_handle_worldmap):
         return [f'open {entity}' for entity in entities_to_open]
     
     def prepare_meal_command_generate(self):
-        # TODO: 判断，当身处厨房，有食谱，且背包里的物品和食谱中的物品相同，才会生成prepare meal命令
+        # 判断，当身处厨房，有食谱，且背包里的物品和食谱中的物品相同，才会生成prepare meal命令
         if self.recipe == '':
             logger.debug('No recipe found in game state, no need to generate prepare meal commands')
             return []
@@ -226,10 +226,45 @@ class Game_command_generate_bert_filter(Game_command_generate):
             self.act(action)
         print(self.info['description'])
         print_prompt(self)
-    
+
+
+class Game_command_generate_bert_filter_with_navigator(Game_command_generate_bert_filter):
+    def navigate_command_generate(self):
+        entities = self.filter_enetities_in_ingredients(self.info['entities'])
+        entities += ['knife']
+        entities += KITCHENWARES
+        commands = []
+        current_room = common.extract_room_name(self.info['description'])
+        for entity in entities:
+            if entity in self.itemMap:
+                target_room = self.itemMap[entity]['room']
+                if target_room not in ['inventory', '', current_room]:
+                    commands.append(f'navigate to {entity}')
+        return commands
+    def filtered_available_commands(self):
+        cook_commands = self.cook_command_generate()
+        knife_commands = self.knife_command_generate()
+        drop_commands = self.drop_command_generate()
+        eat_commands = self.eat_command_generate()
+        take_commands = self.take_command_generate()
+        open_commands = self.open_command_generate()
+        prepare_meal_commands = self.prepare_meal_command_generate()
+        go_commands = self.go_command_generate()
+        examine_cookbook = self.examine_cookbook_command_generate()
+        # NOTE: Use bert to filter open & go commands
+        open_go_commands = open_commands + go_commands
+        open_go_commands = self.use_bert_filter(common.description_simplify(self.info['description']), open_go_commands)
+        all_commands = cook_commands + knife_commands + take_commands + drop_commands + \
+            open_go_commands + prepare_meal_commands + eat_commands + examine_cookbook
+        # 如果recipe中的物品，knife，以及厨具可以导航，则生成导航命令
+        # TODO:
+        all_commands += self.navigate_command_generate()
+        if COMMAND_LIST_SHUFFLE:
+            random.shuffle(all_commands) # NOTE: 2025.5.5 打乱以提高模型的泛化能力
+        return all_commands
     
 def default_game():
-    return Game_command_generate_bert_filter('/home/taku/Downloads/cog2019_ftwp/games/valid/tw-cooking-recipe1+cook+cut+drop+go6-M2qEFeOXcol3H1ql.ulx')
+    return Game_command_generate_bert_filter_with_navigator('/home/taku/Downloads/cog2019_ftwp/games/valid/tw-cooking-recipe1+cook+cut+drop+go6-M2qEFeOXcol3H1ql.ulx')
 
 def print_prompt(game: Game_command_generate_bert_filter):
     game_state_lack = game_state_from_game(game)

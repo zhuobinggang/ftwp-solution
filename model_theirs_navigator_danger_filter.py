@@ -24,7 +24,7 @@ import os
 
 CSV_SUFFIX = '_command_generate_navigator' # NOTE: 2025.5.19 使用navigator生成的数据集
 
-BEST_MODELS = [4, 4, 2]
+BEST_MODELS = [2, 1, 3] # 2025.5.22 最好的模型更新，性能96.8%
 SAVE_DIR = '/home/taku/Downloads/cog2019_ftwp/trained_models/roberta_theirs_danger_filter_navigator'
 # TODO: check dir exist
 if not os.path.exists(SAVE_DIR):

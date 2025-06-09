@@ -1,12 +1,15 @@
-# TODO: dataset generation
-from game_command_generate import Game_command_generate_bert_filter, default_game
-from dataset_create_taku import row_to_game_state, get_cv_games
+# 2025.5.26 增加历史记录
+# 2025.5.22 navigator模型的性能很好，去掉danger filter后再训练看看 —— 0.95
+# 2025.5.17 基于最新的模型danger filter。使用navigator来准备训练集 + 训练cogniAgent模型
+# 2025.5.16 在训练好的模型的基础上改善ucb1逻辑，使用model_danger_command.py来判断危险指令，对于危险指令，我们将其设定为执行过一次
+from game_command_generate import Game_command_generate_bert_filter_with_navigator, default_game
+from dataset_create_taku import row_to_game_state, get_cv_games, get_game_name
 from dataset_create_taku_command_generate import read_csv_dataset
 import re
 import pandas as pd
 from tqdm import tqdm
 from game import Game_state, test_game
-from common_new import logging, beutiful_print_command_and_probs
+from common_new import logging, beutiful_print_command_and_probs, get_time_str
 from bert_utils import default_tokenizer, special_tokens_dict, EMPTY_RECIPE, EMPTY_INVENTORY
 from bert_utils import BertInput, command_indexs_tokenized, init_bert_ours, DEVICE, NextCommandResult
 logger = logging.getLogger('model_theirs')
@@ -17,17 +20,28 @@ from functools import lru_cache
 import numpy as np
 from recordclass import recordclass
 from pydash.arrays import chunk
+from model_danger_command import use_bert_to_identify_danger_command, MAYBE_DANGER_COMMAND_PREFIX
+import random
+import os
 
-BEST_MODELS = [4, 4, 2]
-SAVE_DIR = '/home/taku/Downloads/cog2019_ftwp/trained_models/roberta_theirs'
+CSV_SUFFIX = '_command_generate_navigator' # NOTE: 2025.5.19 使用navigator生成的数据集
+
+BEST_MODELS = [3,2,2] # NOTE: 2025.5.29
+SAVE_DIR = '/home/taku/Downloads/cog2019_ftwp/trained_models/roberta_theirs_navigator_only'
+# TODO: check dir exist
+if not os.path.exists(SAVE_DIR):
+    os.makedirs(SAVE_DIR)
 TRAIN_SPLIT = 'train'
 # PART_VALID_SPLIT = 'partial_valid'
 VALID_SPLIT = 'valid'
 TEST_SPLIT = 'test'
 MAX_TEST_STEP = 100
-MAX_TOKEN_SIZE = 342
+OLD_MAX_TOKEN_SIZE = 342
+NEW_MAX_TOKEN_SIZE = 402
+# MAX_TOKEN_SIZE = 400
 NEGATIVE_SAMPLE_SIZE = 4
 
+DANGER_FILTER_ON = False # NOTE: 对于navigator only模型，danger filter不需要打开
 
 # NOTE: For testing
 # TRAIN_SPLIT = 'fake_test'
@@ -35,7 +49,7 @@ NEGATIVE_SAMPLE_SIZE = 4
 # TEST_SPLIT = 'fake_test'
 # MAX_TEST_STEP = 10
 
-GAME_INIT_FUNC = Game_command_generate_bert_filter
+GAME_INIT_FUNC = Game_command_generate_bert_filter_with_navigator
 
 def get_writer():
     from tensorboardX import SummaryWriter
@@ -58,11 +72,23 @@ def bert_tokenize_prompt_cut_theirs(game_state: Game_state, action: str):
     if recip_text == '':
         recip_text = EMPTY_RECIPE
     text += f"{recip_text} {game_state.description_clean()} " # NOTE: 2025.5.11 space is important!
+    # NOTE: 2025.5.26 增加历史记录
+    # history_text = game_state.action_history_simple(history_window=5).strip()
+    # text_b = f"{SEP} History: {history_text} Next: {action} {SEP}"
     text_b = f"{SEP} {action} {SEP}"
     tokens = toker.encode(text, add_special_tokens=False) # list of numbers
     text_b_tokens = toker.encode(text_b, add_special_tokens=False)
-    if len(tokens) + len(text_b_tokens) > MAX_TOKEN_SIZE:
-        tokens = tokens[:MAX_TOKEN_SIZE - len(text_b_tokens)]
+    if len(tokens) + len(text_b_tokens) > OLD_MAX_TOKEN_SIZE:
+        tokens = tokens[:OLD_MAX_TOKEN_SIZE - len(text_b_tokens)]
+    # 新的text_b_tokens
+    history_text = game_state.action_history_simple(history_window=5).strip()
+    history_tokens = toker.encode(history_text, add_special_tokens=False)
+    before_history_tokens = toker.encode(f"{SEP} History: ", add_special_tokens=False)
+    after_history_tokens = toker.encode(f" Next: {action} {SEP}", add_special_tokens=False)
+    if len(tokens) + len(before_history_tokens) + len(history_tokens) + len(after_history_tokens) > NEW_MAX_TOKEN_SIZE:
+        # 截断历史记录
+        history_tokens = history_tokens[:NEW_MAX_TOKEN_SIZE - len(tokens) - len(before_history_tokens) - len(after_history_tokens)]
+    text_b_tokens = before_history_tokens + history_tokens + after_history_tokens
     return tokens, text_b_tokens
 
 # NOTE: 使用CLS token作为解码token
@@ -71,13 +97,13 @@ def to_bert_input_theirs(state: Game_state, action: str, positive = True, need_p
     prompt_ids = a_tokens + b_tokens
     attention_mask = [1] * len(prompt_ids)
     pad_size = 0
-    if need_padding and len(prompt_ids) < MAX_TOKEN_SIZE:
-        pad_size = MAX_TOKEN_SIZE - len(prompt_ids)
+    if need_padding and len(prompt_ids) < NEW_MAX_TOKEN_SIZE:
+        pad_size = NEW_MAX_TOKEN_SIZE - len(prompt_ids)
         prompt_ids += [default_tokenizer().pad_token_id] * pad_size
         attention_mask += [0] * pad_size
     if need_padding:
-        assert len(prompt_ids) == MAX_TOKEN_SIZE, f"prompt_ids length {len(prompt_ids)} != {MAX_TOKEN_SIZE}"
-    labels = [-100] * MAX_TOKEN_SIZE if need_padding else [-100] * len(prompt_ids)
+        assert len(prompt_ids) == NEW_MAX_TOKEN_SIZE, f"prompt_ids length {len(prompt_ids)} != {NEW_MAX_TOKEN_SIZE}"
+    labels = [-100] * NEW_MAX_TOKEN_SIZE if need_padding else [-100] * len(prompt_ids)
     action_idx = 1 if positive else 0
     labels[0] = command_indexs_tokenized()[action_idx]
     # prepare token_type_ids
@@ -93,7 +119,7 @@ def to_bert_input_theirs(state: Game_state, action: str, positive = True, need_p
 
 @lru_cache(maxsize=1)
 def dataloader_get(split = 'train', batch_size = 8):
-    csv = read_csv_dataset(split = split)
+    csv = read_csv_dataset(split = split, suffix=CSV_SUFFIX)
     csv = csv.sample(frac=1)
     bert_inputs = []
     for row_idx, row in tqdm(csv.iterrows(), total=len(csv), desc="Dataset processing"):
@@ -158,21 +184,20 @@ def batch_predict(bert, batch_bert_input):
     command_logits = logits[:, command_indexs] # (batch_size, 2)
     return command_logits.softmax(dim=1)[:, 1].tolist() # probabilities of positive class
 
-def get_next_command_batch(bert, game_state: Game_state, batch_size = 8):
-        # 对于每一个action，计算它的概率
-        commands = game_state.filtered_available_commands()
-        bert_inputs = []
-        for command in commands:
-            bert_input = to_bert_input_theirs(game_state, command, positive=True, need_padding=True)
-            bert_inputs.append(bert_input)
-        command_probs = []
-        for batch_bert_input in chunk(bert_inputs, batch_size):
-            command_probs += batch_predict(bert, batch_bert_input)
-        command_index = np.argmax(command_probs)
-        max_prob_command = commands[command_index]
-        # beutiful_print_command_and_probs(commands, command_probs)
-        result = NextCommandResult(command_index, max_prob_command, command_probs)
-        return result
+def get_next_command_batch(bert, game_state: Game_state, commands, batch_size = 8):
+    # 对于每一个action，计算它的概率
+    bert_inputs = []
+    for command in commands:
+        bert_input = to_bert_input_theirs(game_state, command, positive=True, need_padding=True)
+        bert_inputs.append(bert_input)
+    command_probs = []
+    for batch_bert_input in chunk(bert_inputs, batch_size):
+        command_probs += batch_predict(bert, batch_bert_input)
+    command_index = np.argmax(command_probs)
+    max_prob_command = commands[command_index]
+    # beutiful_print_command_and_probs(commands, command_probs)
+    result = NextCommandResult(command_index, max_prob_command, command_probs)
+    return result
 
 class Model(nn.Module):
     def __init__(self):
@@ -184,7 +209,7 @@ class Model(nn.Module):
         if not self.bert:
             self.bert = init_bert_ours()
     def predict(self, game_state:Game_state): # @return: action
-        result = get_next_command_batch(self.bert, game_state)
+        result = get_next_command_batch(self.bert, game_state, game_state.filtered_available_commands())
         return result.command
     def save_checkpoint(self, base_path = 'log', epoch = -1):
         path = f'{base_path}/{self.prefix}_epoch_{epoch}.pth'
@@ -249,10 +274,9 @@ class Model_ucb1(Model):
         if len(action_obs_pairs) == 0:
             self.reset_state_action_count(game_state.room)
         self.current_room = game_state.room # 总是要更新当前房间，但是在更新之前需要先更新世界地图（如果有必要）
-    def calculated_state_action_count(self, game_state: Game_state):
+    def calculated_state_action_count(self, game_state: Game_state, actions):
         # NOTE: 使用move_action_mask来促进模型探索新的房间
         state_key = game_state_to_ucb1_key(game_state)
-        actions = game_state.filtered_available_commands()
         state_action_executed_count = [self.get_state_action_count(state_key, action) for action in actions]
         # 通过mask来屏蔽掉已经知道的房间
         state_action_executed_count_mask = [0] * len(actions)
@@ -280,17 +304,38 @@ class Model_ucb1(Model):
                 pass
         masked_state_action_executed_count = [a + b for a, b in zip(state_action_executed_count, state_action_executed_count_mask)]
         return masked_state_action_executed_count
+    def danger_action_mask(self, game_state: Game_state, actions):
+        raise NotImplementedError('Should not be used in navigator only model!')
+        danger_action_mask = [0] * len(actions)
+        # NOTE: 2025.5.16 使用bert来判断危险指令
+        recip_text = game_state.recipe_clean().strip()
+        if recip_text == '':
+            return danger_action_mask
+        for idx, action in enumerate(actions):
+            prefix = action.split()[0]
+            if prefix in MAYBE_DANGER_COMMAND_PREFIX:
+                if use_bert_to_identify_danger_command(recip_text, action):
+                    # logger.debug(f'Action {action} is dangerous. I will mark it as executed.')
+                    danger_action_mask[idx] = 1
+        return danger_action_mask
     def predict(self, game_state:Game_state):
         # NOTE: 更新世界地图(根据上一步动作的结果)，只要发生移动必须对链接进行更新
+        all_actions = game_state.filtered_available_commands()
         self.reset_state_action_count_if_need(game_state)
-        masked_state_action_executed_count = self.calculated_state_action_count(game_state)
+        masked_state_action_executed_count = self.calculated_state_action_count(game_state, all_actions)
+        if DANGER_FILTER_ON: # NOTE: 2025.5.16 使用bert来判断危险指令
+            danger_action_mask = self.danger_action_mask(game_state, all_actions)
+            masked_state_action_executed_count = [a + b for a, b in zip(masked_state_action_executed_count, danger_action_mask)]
         # NOTE: 获取logits并使用ucb1算法选择动作
-        actions = game_state.filtered_available_commands()
-        result = get_next_command_batch(self.bert, game_state)
+        result = get_next_command_batch(self.bert, game_state, all_actions)
         logits = result.logits # (actions_length)
         logits = torch.tensor(logits).to(DEVICE)
         best_action_idx, action_prob = choose_action_ubc1(logits, masked_state_action_executed_count)
-        best_action = actions[best_action_idx]
+        best_action = all_actions[best_action_idx]
+        if DANGER_FILTER_ON: # DEBUG
+            model_choice_index = logits.argmax().item()
+            if danger_action_mask[model_choice_index] == 1:
+                logger.warning(f'Action {all_actions[model_choice_index]} is dangerous. I marked it as executed. Final action: {best_action}')
         state_key = game_state_to_ucb1_key(game_state)
         self.incresase_state_action_count(state_key, best_action)
         if False:
@@ -330,9 +375,11 @@ def train(model, batch_size = 8, split = 'train', log_name = ''):
         optimizer.zero_grad()
 
 def train_repeat(repeat = 3, epoch = 8, batch_size = 8):
-    global BEST_MODELS
+    global BEST_MODELS, MAX_TEST_STEP
     # TRAIN_SPLIT = 'fake_test'
-    # FULL_VALID_SPLIT = 'fake_test'
+    # VALID_SPLIT = 'fake_test'
+    # TEST_SPLIT = 'fake_test'
+    # MAX_TEST_STEP = 10
     INIC_FUNC = Model_ucb1
     ucb1_on = 'with UCB1' if INIC_FUNC == Model_ucb1 else 'w/o UCB1'
     for rp in range(repeat):
@@ -341,9 +388,9 @@ def train_repeat(repeat = 3, epoch = 8, batch_size = 8):
         max_score = 0
         for i in range(epoch):
             train(model, batch_size=batch_size, split=TRAIN_SPLIT, log_name=f'{rp}')
-            score, avg_step = valid_all(model, split=VALID_SPLIT, game_init_func=Game_command_generate_bert_filter)
-            logger.error(f'Full valid score ({rp}) {ucb1_on}: {score}, average step {avg_step}')
-            print(f'Full valid score ({rp}) {ucb1_on}: {score}, average step {avg_step}')
+            score, avg_step = valid_all(model, split=VALID_SPLIT, game_init_func=GAME_INIT_FUNC)
+            logger.error(f'{get_time_str()} Full valid score ({rp}) {ucb1_on}: {score}, average step {avg_step}')
+            print(f'{get_time_str()} Full valid score ({rp}) {ucb1_on}: {score}, average step {avg_step}')
             # get_writer().add_scalar(f'Score/valid_rp{rp}', score, i)
             if score > max_score:
                 max_score = score
@@ -351,9 +398,9 @@ def train_repeat(repeat = 3, epoch = 8, batch_size = 8):
                 logger.error(f'Best model ({rp}) at epoch {i}, score {max_score}, average step {avg_step}. BEST_MODELS: {BEST_MODELS}')
                 # get_writer().add_scalar(f'Score/best_valid_rp{rp}', score, i)
                 # 补上测试分数
-                score, avg_step = valid_all(model, split=TEST_SPLIT, game_init_func=Game_command_generate_bert_filter)
-                logger.error(f'Full test score ({rp}) {ucb1_on}: {score}, average step {avg_step}')
-                print(f'Full test score ({rp}) {ucb1_on}: {score}, average step {avg_step}')
+                # score, avg_step = valid_all(model, split=TEST_SPLIT, game_init_func=GAME_INIT_FUNC)
+                # logger.error(f'Full test score ({rp}) {ucb1_on}: {score}, average step {avg_step}')
+                # print(f'Full test score ({rp}) {ucb1_on}: {score}, average step {avg_step}')
             model.save_checkpoint(base_path = SAVE_DIR, epoch=i)
 
 def test_script():
@@ -373,7 +420,7 @@ def test_script():
 def valid_all(model: Model, split = 'partial_valid', game_init_func = None):
     if game_init_func is None:
         game_init_func = GAME_INIT_FUNC
-        assert GAME_INIT_FUNC == Game_command_generate_bert_filter, '默认使用bert来过滤合成的动作'
+        assert GAME_INIT_FUNC == Game_command_generate_bert_filter_with_navigator, '默认使用bert来过滤合成的动作'
     game_paths = get_cv_games(split=split)
     score = 0
     max_score = 0
@@ -408,14 +455,132 @@ def test_trained(repeat = 3):
     for rp in range(repeat):
         path = f'{SAVE_DIR}/roberta_theirs_repeat_{rp}_epoch_{BEST_MODELS[rp]}.pth'
         model = get_model(path, init_func=INIC_FUNC)
-        s1, avg_step = valid_all(model, split=VALID_SPLIT, game_init_func=Game_command_generate_bert_filter)
-        print(f'Full valid score ({rp}): {s1} {ucb1_on}, average step {avg_step}')
-        logger.error(f'Full valid score ({rp}): {s1} {ucb1_on}, average step {avg_step}')
-        # s2, avg_step = valid_all(model, split=TEST_SPLIT, game_init_func=Game_command_generate_bert_filter)
-        # print(f'Full test score ({rp}): {s2} {ucb1_on}, average step {avg_step}')
-        # logger.error(f'Full test score ({rp}): {s2} {ucb1_on}, average step {avg_step}')
+        # s1, avg_step = valid_all(model, split=VALID_SPLIT, game_init_func=Game_command_generate_bert_filter)
+        # print(f'Full valid score ({rp}): {s1} {ucb1_on}, average step {avg_step}')
+        # logger.error(f'Full valid score ({rp}): {s1} {ucb1_on}, average step {avg_step}')
+        s2, avg_step = valid_all(model, split=TEST_SPLIT, game_init_func=GAME_INIT_FUNC)
+        print(f'Full test score ({rp}): {s2} {ucb1_on}, average step {avg_step}')
+        logger.error(f'Full test score ({rp}): {s2} {ucb1_on}, average step {avg_step}')
 
 
 def night_run():
     train_repeat(repeat=3, epoch=5, batch_size=8)
-    # test_trained(repeat=3)
+    test_trained(repeat=3)
+
+
+# ==================== 2025.5.19 为navigator准备数据集 ====================
+
+def get_clean_clean_walkthrough(game_path):
+    from game_command_generate import game_state_from_game
+    game = GAME_INIT_FUNC(game_path)
+    game.reset()
+    clean_walkthrough = game.clean_walkthrough()
+    clean_clean_walkthrough = []
+    for cmd in clean_walkthrough:
+        if game.done:
+            break
+        # 过滤掉不好的动作
+        admissible_commands = game.filtered_available_commands()
+        if cmd.startswith('take'):
+            cmd = re.sub(r'\sfrom.*$', '', cmd)
+        if cmd not in admissible_commands:
+            if cmd == 'eat meal':
+                # logger.debug(f'Eat meal not in admissible_commands, I will add it to make sure the game can done.')
+                admissible_commands.append(cmd)
+            else:
+                # logger.error(f'Command {cmd} not in {admissible_commands}, I will skip it.')
+                continue
+        clean_clean_walkthrough.append(cmd)
+        game.act(cmd)
+    assert game.done
+    return clean_clean_walkthrough
+
+def extract_walkthrough_dataset_with_navigator(split = 'fake_test', test_game_path = ''):
+    from game_command_generate import game_state_from_game
+    assert GAME_INIT_FUNC == Game_command_generate_bert_filter_with_navigator, 'We need to use Game_command_generate_bert_filter to generate the dataset.'
+    if test_game_path:
+        train_games = [test_game_path]
+    else:
+        train_games = get_cv_games(split = split)
+    gamesteps = []
+    for game_path in tqdm(train_games):
+        clean_walkthrough = get_clean_clean_walkthrough(game_path)
+        if test_game_path:
+            print(f'clean walkthrough: {clean_walkthrough}')
+        cmd_index = 0
+        game = GAME_INIT_FUNC(game_path)
+        game.reset()
+        while cmd_index < len(clean_walkthrough):
+            cmd = clean_walkthrough[cmd_index]
+            if game.done:
+                break
+            game_state = game_state_from_game(game)
+            admissible_commands = game.filtered_available_commands()
+            if cmd == 'eat meal': # 修正admissible_commands
+                # logger.debug(f'Eat meal not in admissible_commands, I will add it to make sure the game can done.')
+                admissible_commands.append(cmd)
+            game_step = {
+                'game_path': get_game_name(game_path),
+                'room': game_state.room,
+                'step': game.info['moves'], # NOTE: 这里的step是游戏中的步数
+                'action': cmd, # NOTE: 会被导航后下一个动作覆盖
+                'action_obs_pairs': game_state.clean_action_obs_pairs(),
+                'recipe': game_state.recipe_clean(),
+                'inventory': game_state.inventory_clean(),
+                'admissible_commands': admissible_commands,
+                'description': game_state.description_clean(),
+                'won': game.info['won'],
+                'lost': game.info['lost'],
+                'score': game.info['score'],
+                # 'entities': game.info['entities'],
+                'max_score': game.info['max_score'],
+            }
+            need_no_execute = False
+            need_no_append_gamesteps = False
+            if cmd.startswith('go'): # 导航到物品
+                next_non_go_index = cmd_index + 1
+                while next_non_go_index < len(clean_walkthrough) and clean_walkthrough[next_non_go_index].startswith('go'):
+                    next_non_go_index += 1
+                non_go_command = clean_walkthrough[next_non_go_index]
+                entity = None
+                if non_go_command.startswith('take'):
+                    entity = non_go_command.split()[1]
+                elif non_go_command.startswith('cook'):
+                    entity = non_go_command.split()[-1]
+                if entity and entity in game.itemMap: # 可以导航到物品
+                    need_no_execute = True # 导航在这个代码快中执行
+                    prev_room = game_state.room
+                    navigate_action = f'navigate to {entity}'
+                    clean_navigate_commands = []
+                    if navigate_action not in admissible_commands: # 可能出现循环导航，可以直接省略
+                        print(f'{game_state.room}, {game.itemMap[entity]["room"]}')
+                        if game_state.room == game.itemMap[entity]['room']:
+                            logger.warning('循环导航，省略当前指令，不需要置入数据集')
+                            need_no_append_gamesteps = True
+                        else:
+                            raise ValueError(f'Command {game_step["action"]} not in {admissible_commands}, current room {game_state.room}, game path {game_path}, itemMap {game.itemMap}')
+                    else:
+                        game_step['action'] = navigate_action # 覆盖动作
+                        clean_navigate_commands = game.navigate_to_item(entity)
+                        for command in clean_navigate_commands:
+                            game.act(command)
+                    # 导航执行完毕，获取了新的state信息，置入gamesteps
+                    game_state = game_state_from_game(game)
+                    logger.debug(f'Navigate to {entity}, {prev_room} -> {game_state.room}, paths: {clean_navigate_commands}')
+                    logger.debug(game_path)
+                    cmd = non_go_command
+                    cmd_index = next_non_go_index
+            if not need_no_append_gamesteps:
+                gamesteps.append(game_step)
+            if not need_no_execute:
+                game.act(cmd) # 执行的可能是导航后的下一个指令
+                cmd_index += 1
+        assert game.done
+    return pd.DataFrame(gamesteps)
+
+def create_csv_dataset(outputpath = 'good_dataset'):
+    import os
+    for split in ['valid', 'test', 'train', 'fake_test']:
+        df = extract_walkthrough_dataset_with_navigator(split)
+        df.to_csv(os.path.join(outputpath,
+                        f'walkthrough_{split}_command_generate_navigator.csv'), index=False)

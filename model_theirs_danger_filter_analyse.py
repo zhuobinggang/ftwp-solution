@@ -1,4 +1,5 @@
-# TODO: dataset generation
+# 2025.6.5 关闭危险指令过滤，考察危险指令权重能否提高性能。初步权重选择2.0。
+# 2025.5.16 在训练好的模型的基础上改善ucb1逻辑，使用model_danger_command.py来判断危险指令，对于危险指令，我们将其设定为执行过一次
 from game_command_generate import Game_command_generate_bert_filter, default_game
 from dataset_create_taku import row_to_game_state, get_cv_games
 from dataset_create_taku_command_generate import read_csv_dataset
@@ -6,7 +7,7 @@ import re
 import pandas as pd
 from tqdm import tqdm
 from game import Game_state, test_game
-from common_new import logging, beutiful_print_command_and_probs
+from common_new import logging, beutiful_print_command_and_probs, get_time_str
 from bert_utils import default_tokenizer, special_tokens_dict, EMPTY_RECIPE, EMPTY_INVENTORY
 from bert_utils import BertInput, command_indexs_tokenized, init_bert_ours, DEVICE, NextCommandResult
 logger = logging.getLogger('model_theirs')
@@ -17,9 +18,10 @@ from functools import lru_cache
 import numpy as np
 from recordclass import recordclass
 from pydash.arrays import chunk
+from model_danger_command import use_bert_to_identify_danger_command, MAYBE_DANGER_COMMAND_PREFIX, is_vital_action
 
-BEST_MODELS = [4, 4, 2]
-SAVE_DIR = '/home/taku/Downloads/cog2019_ftwp/trained_models/roberta_theirs'
+BEST_MODELS = [0,0,0]
+SAVE_DIR = '/home/taku/Downloads/cog2019_ftwp/trained_models/roberta_theirs_danger_weight'
 TRAIN_SPLIT = 'train'
 # PART_VALID_SPLIT = 'partial_valid'
 VALID_SPLIT = 'valid'
@@ -28,6 +30,11 @@ MAX_TEST_STEP = 100
 MAX_TOKEN_SIZE = 342
 NEGATIVE_SAMPLE_SIZE = 4
 
+DANGER_COMMAND_WEIGHT = 1.5
+NOT_TRUE_COMMAND_WEIGHT = 1.0
+TRUE_COMMAND_WEIGHT = 1.0
+
+DANGER_FILTER_ON = False
 
 # NOTE: For testing
 # TRAIN_SPLIT = 'fake_test'
@@ -96,6 +103,7 @@ def dataloader_get(split = 'train', batch_size = 8):
     csv = read_csv_dataset(split = split)
     csv = csv.sample(frac=1)
     bert_inputs = []
+    weights = [] # 用于存储每个样本的权重
     for row_idx, row in tqdm(csv.iterrows(), total=len(csv), desc="Dataset processing"):
         state = row_to_game_state(row) # NOTE: 2025.5.5 打乱以提高模型的泛化能力
         negative_commands = [command for command in row['admissible_commands'] if command != row['action']]
@@ -103,14 +111,23 @@ def dataloader_get(split = 'train', batch_size = 8):
         for command in negative_commands:
             bert_input = to_bert_input_theirs(state, command, positive=False, need_padding=True)
             bert_inputs.append(bert_input)
+            # 如果是危险指令，使用2.0的权重
+            if is_vital_action(command):
+                weights.append(DANGER_COMMAND_WEIGHT)
+            else:
+                weights.append(NOT_TRUE_COMMAND_WEIGHT)
         bert_input = to_bert_input_theirs(state, row['action'], positive=True, need_padding=True)
         bert_inputs.append(bert_input)
+        weights.append(TRUE_COMMAND_WEIGHT) # 正例的权重为1.0
     all_input_ids = torch.tensor([bert_input.input_ids for bert_input in bert_inputs], dtype=torch.long)
     all_attention_mask = torch.tensor([bert_input.attention_mask for bert_input in bert_inputs], dtype=torch.long)
     all_label_ids = torch.tensor([bert_input.labels for bert_input in bert_inputs], dtype=torch.long)
     # NOTE: only for their model
-    all_token_type_ids = torch.tensor([bert_input.token_type_ids for bert_input in bert_inputs], dtype=torch.long)
-    train_data = TensorDataset(all_input_ids, all_attention_mask, all_label_ids, all_token_type_ids)
+    # all_token_type_ids = torch.tensor([bert_input.token_type_ids for bert_input in bert_inputs], dtype=torch.long)
+    all_weights = torch.zeros((len(bert_inputs), MAX_TOKEN_SIZE), dtype=torch.float)
+    for idx, weight in enumerate(weights):
+        all_weights[idx, 0] = weight
+    train_data = TensorDataset(all_input_ids, all_attention_mask, all_label_ids, all_weights)
     train_sampler = RandomSampler(train_data)
     train_dataloader = DataLoader(train_data, sampler=train_sampler, batch_size=batch_size)
     return train_dataloader
@@ -158,21 +175,20 @@ def batch_predict(bert, batch_bert_input):
     command_logits = logits[:, command_indexs] # (batch_size, 2)
     return command_logits.softmax(dim=1)[:, 1].tolist() # probabilities of positive class
 
-def get_next_command_batch(bert, game_state: Game_state, batch_size = 8):
-        # 对于每一个action，计算它的概率
-        commands = game_state.filtered_available_commands()
-        bert_inputs = []
-        for command in commands:
-            bert_input = to_bert_input_theirs(game_state, command, positive=True, need_padding=True)
-            bert_inputs.append(bert_input)
-        command_probs = []
-        for batch_bert_input in chunk(bert_inputs, batch_size):
-            command_probs += batch_predict(bert, batch_bert_input)
-        command_index = np.argmax(command_probs)
-        max_prob_command = commands[command_index]
-        # beutiful_print_command_and_probs(commands, command_probs)
-        result = NextCommandResult(command_index, max_prob_command, command_probs)
-        return result
+def get_next_command_batch(bert, game_state: Game_state, commands, batch_size = 8):
+    # 对于每一个action，计算它的概率
+    bert_inputs = []
+    for command in commands:
+        bert_input = to_bert_input_theirs(game_state, command, positive=True, need_padding=True)
+        bert_inputs.append(bert_input)
+    command_probs = []
+    for batch_bert_input in chunk(bert_inputs, batch_size):
+        command_probs += batch_predict(bert, batch_bert_input)
+    command_index = np.argmax(command_probs)
+    max_prob_command = commands[command_index]
+    # beutiful_print_command_and_probs(commands, command_probs)
+    result = NextCommandResult(command_index, max_prob_command, command_probs)
+    return result
 
 class Model(nn.Module):
     def __init__(self):
@@ -184,7 +200,7 @@ class Model(nn.Module):
         if not self.bert:
             self.bert = init_bert_ours()
     def predict(self, game_state:Game_state): # @return: action
-        result = get_next_command_batch(self.bert, game_state)
+        result = get_next_command_batch(self.bert, game_state, game_state.filtered_available_commands())
         return result.command
     def save_checkpoint(self, base_path = 'log', epoch = -1):
         path = f'{base_path}/{self.prefix}_epoch_{epoch}.pth'
@@ -249,10 +265,9 @@ class Model_ucb1(Model):
         if len(action_obs_pairs) == 0:
             self.reset_state_action_count(game_state.room)
         self.current_room = game_state.room # 总是要更新当前房间，但是在更新之前需要先更新世界地图（如果有必要）
-    def calculated_state_action_count(self, game_state: Game_state):
+    def calculated_state_action_count(self, game_state: Game_state, actions):
         # NOTE: 使用move_action_mask来促进模型探索新的房间
         state_key = game_state_to_ucb1_key(game_state)
-        actions = game_state.filtered_available_commands()
         state_action_executed_count = [self.get_state_action_count(state_key, action) for action in actions]
         # 通过mask来屏蔽掉已经知道的房间
         state_action_executed_count_mask = [0] * len(actions)
@@ -280,17 +295,37 @@ class Model_ucb1(Model):
                 pass
         masked_state_action_executed_count = [a + b for a, b in zip(state_action_executed_count, state_action_executed_count_mask)]
         return masked_state_action_executed_count
+    def danger_action_mask(self, game_state: Game_state, actions):
+        danger_action_mask = [0] * len(actions)
+        # NOTE: 2025.5.16 使用bert来判断危险指令
+        recip_text = game_state.recipe_clean().strip()
+        if recip_text == '':
+            return danger_action_mask
+        for idx, action in enumerate(actions):
+            prefix = action.split()[0]
+            if prefix in MAYBE_DANGER_COMMAND_PREFIX:
+                if use_bert_to_identify_danger_command(recip_text, action):
+                    # logger.debug(f'Action {action} is dangerous. I will mark it as executed.')
+                    danger_action_mask[idx] = 1
+        return danger_action_mask
     def predict(self, game_state:Game_state):
         # NOTE: 更新世界地图(根据上一步动作的结果)，只要发生移动必须对链接进行更新
+        all_actions = game_state.filtered_available_commands()
         self.reset_state_action_count_if_need(game_state)
-        masked_state_action_executed_count = self.calculated_state_action_count(game_state)
+        masked_state_action_executed_count = self.calculated_state_action_count(game_state, all_actions)
+        if DANGER_FILTER_ON: # NOTE: 2025.5.16 使用bert来判断危险指令
+            danger_action_mask = self.danger_action_mask(game_state, all_actions)
+            masked_state_action_executed_count = [a + b for a, b in zip(masked_state_action_executed_count, danger_action_mask)]
         # NOTE: 获取logits并使用ucb1算法选择动作
-        actions = game_state.filtered_available_commands()
-        result = get_next_command_batch(self.bert, game_state)
+        result = get_next_command_batch(self.bert, game_state, all_actions)
         logits = result.logits # (actions_length)
         logits = torch.tensor(logits).to(DEVICE)
         best_action_idx, action_prob = choose_action_ubc1(logits, masked_state_action_executed_count)
-        best_action = actions[best_action_idx]
+        best_action = all_actions[best_action_idx]
+        if DANGER_FILTER_ON: # DEBUG
+            model_choice_index = logits.argmax().item()
+            if danger_action_mask[model_choice_index] == 1:
+                logger.warning(f'Action {all_actions[model_choice_index]} is dangerous. I marked it as executed. Final action: {best_action}')
         state_key = game_state_to_ucb1_key(game_state)
         self.incresase_state_action_count(state_key, best_action)
         if False:
@@ -316,18 +351,36 @@ def train(model, batch_size = 8, split = 'train', log_name = ''):
     model, optimizer, train_dataloader = accelerator.prepare(
         model, optimizer, train_dataloader
     )
+    """
+        for batch_idx, batch in enumerate(tqdm(train_dataloader, desc="Iteration")):
+            input_ids, input_mask, label_ids, weights = batch
+            # NOTE: 2025.5.11 RoBERTa don't use token_type_ids! Error happens if use it!
+            outputs = model.bert(input_ids=input_ids.to(DEVICE), 
+                    attention_mask=input_mask.to(DEVICE), 
+                    # token_type_ids=token_type_ids.to(DEVICE),
+                    labels=label_ids.to(DEVICE))
+            loss = outputs.loss
+            accelerator.backward(loss)
+            writer.add_scalar(f'Loss/train_{log_name}', loss.item(), batch_idx)
+            optimizer.step()
+            optimizer.zero_grad()
+    """
     for batch_idx, batch in enumerate(tqdm(train_dataloader, desc="Iteration")):
-        input_ids, input_mask, label_ids, token_type_ids = batch
-        # NOTE: 2025.5.11 RoBERTa don't use token_type_ids! Error happens if use it!
-        outputs = model.bert(input_ids=input_ids.to(DEVICE), 
-                   attention_mask=input_mask.to(DEVICE), 
-                   # token_type_ids=token_type_ids.to(DEVICE),
-                   labels=label_ids.to(DEVICE))
-        loss = outputs.loss
+        a, b, c, d = batch
+        losss = []
+        for input_ids, input_mask, label_ids, weights in zip(a, b, c, d):
+            out = model.bert(input_ids=input_ids.unsqueeze(0).to(DEVICE), 
+                    attention_mask=input_mask.unsqueeze(0).to(DEVICE), 
+                    # token_type_ids=token_type_ids.to(DEVICE),
+                    labels=label_ids.unsqueeze(0).to(DEVICE))
+            loss = out.loss
+            losss.append(loss * weights[0]) # 注意这里的weights是一个向量，和loss的shape一致
+        loss = sum(losss) / len(losss) # 平均损失
         accelerator.backward(loss)
         writer.add_scalar(f'Loss/train_{log_name}', loss.item(), batch_idx)
         optimizer.step()
         optimizer.zero_grad()
+
 
 def train_repeat(repeat = 3, epoch = 8, batch_size = 8):
     global BEST_MODELS
@@ -341,9 +394,9 @@ def train_repeat(repeat = 3, epoch = 8, batch_size = 8):
         max_score = 0
         for i in range(epoch):
             train(model, batch_size=batch_size, split=TRAIN_SPLIT, log_name=f'{rp}')
-            score, avg_step = valid_all(model, split=VALID_SPLIT, game_init_func=Game_command_generate_bert_filter)
-            logger.error(f'Full valid score ({rp}) {ucb1_on}: {score}, average step {avg_step}')
-            print(f'Full valid score ({rp}) {ucb1_on}: {score}, average step {avg_step}')
+            score, avg_step = valid_all(model, split=VALID_SPLIT, game_init_func=GAME_INIT_FUNC)
+            logger.error(f'{get_time_str()} Full valid score ({rp}) {ucb1_on}: {score}, average step {avg_step}')
+            print(f'{get_time_str()} Full valid score ({rp}) {ucb1_on}: {score}, average step {avg_step}')
             # get_writer().add_scalar(f'Score/valid_rp{rp}', score, i)
             if score > max_score:
                 max_score = score
@@ -351,9 +404,9 @@ def train_repeat(repeat = 3, epoch = 8, batch_size = 8):
                 logger.error(f'Best model ({rp}) at epoch {i}, score {max_score}, average step {avg_step}. BEST_MODELS: {BEST_MODELS}')
                 # get_writer().add_scalar(f'Score/best_valid_rp{rp}', score, i)
                 # 补上测试分数
-                score, avg_step = valid_all(model, split=TEST_SPLIT, game_init_func=Game_command_generate_bert_filter)
-                logger.error(f'Full test score ({rp}) {ucb1_on}: {score}, average step {avg_step}')
-                print(f'Full test score ({rp}) {ucb1_on}: {score}, average step {avg_step}')
+                # score, avg_step = valid_all(model, split=TEST_SPLIT, game_init_func=Game_command_generate_bert_filter)
+                # logger.error(f'Full test score ({rp}) {ucb1_on}: {score}, average step {avg_step}')
+                # print(f'Full test score ({rp}) {ucb1_on}: {score}, average step {avg_step}')
             model.save_checkpoint(base_path = SAVE_DIR, epoch=i)
 
 def test_script():
@@ -408,14 +461,14 @@ def test_trained(repeat = 3):
     for rp in range(repeat):
         path = f'{SAVE_DIR}/roberta_theirs_repeat_{rp}_epoch_{BEST_MODELS[rp]}.pth'
         model = get_model(path, init_func=INIC_FUNC)
-        s1, avg_step = valid_all(model, split=VALID_SPLIT, game_init_func=Game_command_generate_bert_filter)
-        print(f'Full valid score ({rp}): {s1} {ucb1_on}, average step {avg_step}')
-        logger.error(f'Full valid score ({rp}): {s1} {ucb1_on}, average step {avg_step}')
-        # s2, avg_step = valid_all(model, split=TEST_SPLIT, game_init_func=Game_command_generate_bert_filter)
-        # print(f'Full test score ({rp}): {s2} {ucb1_on}, average step {avg_step}')
-        # logger.error(f'Full test score ({rp}): {s2} {ucb1_on}, average step {avg_step}')
+        # s1, avg_step = valid_all(model, split=VALID_SPLIT, game_init_func=Game_command_generate_bert_filter)
+        # print(f'Full valid score ({rp}): {s1} {ucb1_on}, average step {avg_step}')
+        # logger.error(f'Full valid score ({rp}): {s1} {ucb1_on}, average step {avg_step}')
+        s2, avg_step = valid_all(model, split=TEST_SPLIT, game_init_func=GAME_INIT_FUNC)
+        print(f'Full test score ({rp}): {s2} {ucb1_on}, average step {avg_step}')
+        logger.error(f'Full test score ({rp}): {s2} {ucb1_on}, average step {avg_step}')
 
 
 def night_run():
     train_repeat(repeat=3, epoch=5, batch_size=8)
-    # test_trained(repeat=3)
+    test_trained(repeat=3)

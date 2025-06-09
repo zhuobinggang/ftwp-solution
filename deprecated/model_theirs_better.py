@@ -10,7 +10,7 @@ from model_theirs import beutiful_print_command_and_probs, get_writer, logger, o
 import numpy as np
 import torch
 
-BEST_MODELS = [0,0,0]
+BEST_MODELS = [3,4,4]
 SAVE_DIR = '/home/taku/Downloads/cog2019_ftwp/trained_models/roberta_theirs_multi_choice'
 TRAIN_SPLIT = 'train'
 # PART_VALID_SPLIT = 'partial_valid'

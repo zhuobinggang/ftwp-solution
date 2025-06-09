@@ -144,6 +144,21 @@ def actions_to_list_number(actions, start_index = 0):
         count += 1
     return available_action_text.strip()
 
+
+def action_obs_pairs_to_history_simple(action_obs_pairs, seperator = '>', no_action_text = 'empty', history_window = 100):
+    if history_window == 0:
+        return ''
+    # print(action_obs_pairs)
+    action_history = ''
+    if len(action_obs_pairs) > 0:
+        text_list = []
+        for idx, (act, obs) in enumerate(action_obs_pairs):
+            text_list.append(f'{act} {seperator} {obs}')
+        action_history = ' '.join(text_list[-history_window:])
+    else:
+        action_history = no_action_text
+    return action_history
+
 def action_obs_pairs_to_history(action_obs_pairs, seperator = '->', no_action_text = 'No action was taken now.', history_window = 100):
     if history_window == 0:
         return ''

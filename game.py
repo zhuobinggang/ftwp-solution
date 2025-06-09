@@ -293,6 +293,10 @@ class Game_state:
         action_obs_pairs = self.clean_action_obs_pairs()
         action_history_text = common.action_obs_pairs_to_history(action_obs_pairs, seperator=seperator, no_action_text=no_action_text, history_window = history_window)        
         return action_history_text
+    def action_history_simple(self, history_window = 5, seperator='>', no_action_text='empty'):
+        action_obs_pairs = self.clean_action_obs_pairs()
+        action_history_text = common.action_obs_pairs_to_history_simple(action_obs_pairs, seperator=seperator, no_action_text=no_action_text, history_window = history_window)        
+        return action_history_text
     def filtered_available_commands(self):
         if self.filtered_commands is not None:
             return self.filtered_commands

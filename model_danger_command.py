@@ -47,6 +47,12 @@ PredictResult = recordclass('PredictResult', 'command danger_prob safe_prob')
 """
 MAX_TOKEN_LENGTH = 100
 
+def is_vital_action(action):
+    prefix = action.split()[0]
+    if prefix in CUT_COMMAND_PREFIX or prefix in COOK_COMMAND_PREFIX:
+        return True
+    return False
+
 # TESTED
 def bert_input_command_filter(recipe_clean, command, padding = True, logging = False):
     SEP, CLS, PAD = special_tokens_dict().sep, special_tokens_dict().cls, special_tokens_dict().pad
@@ -162,6 +168,17 @@ def read_csv_dataset(inputpath = 'good_dataset', split = 'fake_test', suffix = '
     df['safe_actions'] = df['safe_actions'].apply(eval)
     return df
 
+def data_analyse():
+    """
+    Analyse the dataset.
+    """
+    df = read_csv_dataset(split = 'train')
+    print(f'The dataset has {len(df)} rows.')
+    print(f'The dataset has {df["danger_actions"].apply(len).sum()} danger actions.')
+    print(f'The dataset has {df["safe_actions"].apply(len).sum()} safe actions.')
+    # print(f'The dataset has {df["recipe"].nunique()} unique recipes.')
+    # print(f'The dataset has {df["recipe"].apply(lambda x: len(x.split())).mean()} average length of recipe.')
+
 def get_game_name(gamepath):
     return os.path.split(gamepath)[-1]
 
@@ -194,9 +211,11 @@ def extract_walkthrough_dataset(split = 'fake_test', skip_bad_actions = True):
                     logger.error(f'Command {cmd} not in {admissible_commands}, I will skip it.')
                     continue
             for action in admissible_commands: # 先全部加进danger_actions
-                prefix = action.split()[0]
-                if prefix in CUT_COMMAND_PREFIX or prefix in COOK_COMMAND_PREFIX:
+                if is_vital_action(action):
                     danger_set.add(action)
+                # prefix = action.split()[0]
+                # if prefix in CUT_COMMAND_PREFIX or prefix in COOK_COMMAND_PREFIX:
+                #     danger_set.add(action)
             prefix = cmd.split()[0] # 对于需要执行的动作，全部加进safe_actions
             if prefix in CUT_COMMAND_PREFIX or prefix in COOK_COMMAND_PREFIX:
                 safe_set.add(cmd)

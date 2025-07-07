@@ -10,7 +10,7 @@ def get_time_str():
 
 LOG_FILE = f'log/log_{get_time_str()}.log'
 
-DEBUG = True
+DEBUG = False
 if DEBUG:
     logging.basicConfig(filename=LOG_FILE, filemode='w', level=logging.DEBUG)
 else:

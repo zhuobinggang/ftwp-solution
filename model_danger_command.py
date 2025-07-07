@@ -326,11 +326,33 @@ def valid_all_by_csv(model: Model, split = 'valid'):
     # score = f1_score(results, predicts, average='binary', pos_label=1)
     return sum(danger_accuracy) / len(danger_accuracy), sum(safe_accuracy) / len(safe_accuracy)
 
+def valid_all_by_csv_standard(model: Model, split = 'valid'):
+    model.eval()
+    from sklearn.metrics import f1_score, precision_score, recall_score
+    dataset = dataloader_raw(split=split)
+    results = []
+    predicts = []
+    for row_idx, (recipe, danger_actions, safe_actions) in enumerate(tqdm(dataset, desc=f"Validating {split} games")):
+        for cmd in danger_actions:
+            results.append(1)
+            predict_result = model.predict(recipe, cmd)
+            predicts.append(1 if predict_result.danger_prob > 0.5 else 0) 
+        for cmd in safe_actions:
+            results.append(0)
+            predict_result = model.predict(recipe, cmd)
+            predicts.append(1 if predict_result.danger_prob > 0.5 else 0)
+    # score = f1_score(results, predicts, average='binary', pos_label=1)
+    return f1_score(results, predicts, average='binary', pos_label=1), \
+           precision_score(results, predicts, average='binary', pos_label=1), \
+           recall_score(results, predicts, average='binary', pos_label=1)
+
 def valid_all_by_model_path(model_path: str):
-    model = Model()
-    model.load_checkpoint(model_path)
-    model.cuda()
-    return valid_all_by_csv(model, split=FULL_VALID_SPLIT)
+    # model = Model()
+    # model.load_checkpoint(model_path)
+    model = default_trained_model()
+    # model.cuda()
+    # return valid_all_by_csv(model, split=FULL_VALID_SPLIT)
+    return valid_all_by_csv_standard(model, split=FULL_VALID_SPLIT)
 
 
 def train_reapeat(repeat = 1, epoch = 3, batch_size = 32):

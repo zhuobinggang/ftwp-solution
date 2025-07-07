@@ -1,0 +1,29 @@
+Task: Find and examine the cookbook, follow the instructions to prepare the meal, and eat it.
+Room: Kitchen
+Inventory: a fried banana. Total 1 items.
+Recipe: missing
+Available actions:
+0 examine cookbook
+1 open fridge
+2 open frosted-glass door
+3 go north
+4 drop banana
+Next action (answer with the action directly):
+
+0 examine cookbook
+
+
+Executed action 1: examine cookbook
+Room: Kitchen
+Inventory: a fried banana. Total 1 items.
+Recipe: Ingredients: banana flour pork chop red onion water Directions: fry the banana slice the pork chop grill the pork chop chop the red onion prepare meal
+Available actions:
+0 drop banana
+1 open fridge
+2 cook banana with oven
+3 open frosted-glass door
+4 cook banana with stove
+5 go north
+Next action (answer with the action directly):
+
+4 cook banana with stove

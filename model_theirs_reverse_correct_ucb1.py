@@ -1,4 +1,5 @@
-# TODO: dataset generation
+# 2025.5.16 在训练好的模型的基础上改善ucb1逻辑，使用model_danger_command.py来判断危险指令，对于危险指令，我们将其设定为执行过一次
+# 2025.6.30 Action elimination
 from game_command_generate import Game_command_generate_bert_filter, default_game
 from dataset_create_taku import row_to_game_state, get_cv_games
 from dataset_create_taku_command_generate import read_csv_dataset
@@ -18,6 +19,12 @@ import numpy as np
 from recordclass import recordclass
 from pydash.arrays import chunk
 
+CUT_COMMAND_PREFIX = ['slice', 'chop', 'dice']
+COOK_COMMAND_PREFIX = ['cook']
+TAKE_COMMAND_PREFIX = ['take']
+OTHERS = ['prepare', 'eat']
+MAY_GET_POINT_COMMAND_PREFIX = CUT_COMMAND_PREFIX + COOK_COMMAND_PREFIX + TAKE_COMMAND_PREFIX + OTHERS
+
 BEST_MODELS = [4, 4, 2]
 SAVE_DIR = '/home/taku/Downloads/cog2019_ftwp/trained_models/roberta_theirs'
 TRAIN_SPLIT = 'train'
@@ -28,6 +35,7 @@ MAX_TEST_STEP = 100
 MAX_TOKEN_SIZE = 342
 NEGATIVE_SAMPLE_SIZE = 4
 
+DANGER_FILTER_ON = True
 
 # NOTE: For testing
 # TRAIN_SPLIT = 'fake_test'
@@ -158,21 +166,20 @@ def batch_predict(bert, batch_bert_input):
     command_logits = logits[:, command_indexs] # (batch_size, 2)
     return command_logits.softmax(dim=1)[:, 1].tolist() # probabilities of positive class
 
-def get_next_command_batch(bert, game_state: Game_state, batch_size = 8):
-        # 对于每一个action，计算它的概率
-        commands = game_state.filtered_available_commands()
-        bert_inputs = []
-        for command in commands:
-            bert_input = to_bert_input_theirs(game_state, command, positive=True, need_padding=True)
-            bert_inputs.append(bert_input)
-        command_probs = []
-        for batch_bert_input in chunk(bert_inputs, batch_size):
-            command_probs += batch_predict(bert, batch_bert_input)
-        command_index = np.argmax(command_probs)
-        max_prob_command = commands[command_index]
-        # beutiful_print_command_and_probs(commands, command_probs)
-        result = NextCommandResult(command_index, max_prob_command, command_probs)
-        return result
+def get_next_command_batch(bert, game_state: Game_state, commands, batch_size = 8):
+    # 对于每一个action，计算它的概率
+    bert_inputs = []
+    for command in commands:
+        bert_input = to_bert_input_theirs(game_state, command, positive=True, need_padding=True)
+        bert_inputs.append(bert_input)
+    command_probs = []
+    for batch_bert_input in chunk(bert_inputs, batch_size):
+        command_probs += batch_predict(bert, batch_bert_input)
+    command_index = np.argmax(command_probs)
+    max_prob_command = commands[command_index]
+    # beutiful_print_command_and_probs(commands, command_probs)
+    result = NextCommandResult(command_index, max_prob_command, command_probs)
+    return result
 
 class Model(nn.Module):
     def __init__(self):
@@ -184,7 +191,7 @@ class Model(nn.Module):
         if not self.bert:
             self.bert = init_bert_ours()
     def predict(self, game_state:Game_state): # @return: action
-        result = get_next_command_batch(self.bert, game_state)
+        result = get_next_command_batch(self.bert, game_state, game_state.filtered_available_commands())
         return result.command
     def save_checkpoint(self, base_path = 'log', epoch = -1):
         path = f'{base_path}/{self.prefix}_epoch_{epoch}.pth'
@@ -212,6 +219,33 @@ def ucb1(action_cnt, total_cnt):
         return 5
     else:
         return np.sqrt(2*np.log(total_cnt)/action_cnt) # 如果total_cnt=10, action_cnt=1，值大概为2.15，总之都不会比2.5大的感觉。
+
+
+def draw_chart():
+    import matplotlib.pyplot as plt
+    import numpy as np
+    # 全体の試行回数 n（log項に使う）
+    n_total = 100
+    # n_i の値（1〜100）
+    n_i_values = np.arange(1, 101)
+    # 平均報酬は一定と仮定（例：0.5）
+    avg_reward = 0
+    # UCB1スコア計算（n_i > 0 の場合）
+    ucb_scores = avg_reward + np.sqrt(2 * np.log(n_total) / n_i_values)
+    # n_i = 0 のときのスコア
+    ucb_zero = avg_reward + 5
+    # グラフ描画
+    plt.figure(figsize=(8, 5))
+    plt.plot(n_i_values, ucb_scores, label="UCB1 (n_i > 0)")
+    plt.axhline(y=ucb_zero, color='r', linestyle='--', label="UCB1 (n_i = 0)")
+    plt.title("UCB1 Score vs. n_i (n_total = 100)")
+    plt.xlabel("n_i (number of times arm i was selected)")
+    plt.ylabel("UCB1 Score")
+    plt.legend()
+    plt.grid(True)
+    plt.tight_layout()
+    plt.show()
+
 
 def maxmin_norm(p): # 返回0-1之间的值
     return (p - p.min())/(p.max() - p.min())
@@ -249,10 +283,9 @@ class Model_ucb1(Model):
         if len(action_obs_pairs) == 0:
             self.reset_state_action_count(game_state.room)
         self.current_room = game_state.room # 总是要更新当前房间，但是在更新之前需要先更新世界地图（如果有必要）
-    def calculated_state_action_count(self, game_state: Game_state):
+    def calculated_state_action_count(self, game_state: Game_state, actions):
         # NOTE: 使用move_action_mask来促进模型探索新的房间
         state_key = game_state_to_ucb1_key(game_state)
-        actions = game_state.filtered_available_commands()
         state_action_executed_count = [self.get_state_action_count(state_key, action) for action in actions]
         # 通过mask来屏蔽掉已经知道的房间
         state_action_executed_count_mask = [0] * len(actions)
@@ -280,17 +313,41 @@ class Model_ucb1(Model):
                 pass
         masked_state_action_executed_count = [a + b for a, b in zip(state_action_executed_count, state_action_executed_count_mask)]
         return masked_state_action_executed_count
+    def danger_action_mask(self, game_state: Game_state, actions):
+        danger_action_mask = [0] * len(actions)
+        # NOTE: 2025.5.16 使用bert来判断危险指令
+        recip_text = game_state.recipe_clean().strip()
+        if recip_text == '':
+            return danger_action_mask
+        for idx, action in enumerate(actions):
+            prefix = action.split()[0]
+            if prefix in MAY_GET_POINT_COMMAND_PREFIX:
+                danger_action_mask[idx] = 1
+        return danger_action_mask
     def predict(self, game_state:Game_state):
         # NOTE: 更新世界地图(根据上一步动作的结果)，只要发生移动必须对链接进行更新
+        all_actions = game_state.filtered_available_commands()
         self.reset_state_action_count_if_need(game_state)
-        masked_state_action_executed_count = self.calculated_state_action_count(game_state)
+        masked_state_action_executed_count = self.calculated_state_action_count(game_state, all_actions)
+        if DANGER_FILTER_ON: # NOTE: 2025.5.16 使用bert来判断危险指令
+            danger_action_mask = self.danger_action_mask(game_state, all_actions)
+            masked_state_action_executed_count = [a + b for a, b in zip(masked_state_action_executed_count, danger_action_mask)]
         # NOTE: 获取logits并使用ucb1算法选择动作
-        actions = game_state.filtered_available_commands()
-        result = get_next_command_batch(self.bert, game_state)
+        result = get_next_command_batch(self.bert, game_state, all_actions)
         logits = result.logits # (actions_length)
         logits = torch.tensor(logits).to(DEVICE)
         best_action_idx, action_prob = choose_action_ubc1(logits, masked_state_action_executed_count)
-        best_action = actions[best_action_idx]
+        best_action = all_actions[best_action_idx]
+        if DANGER_FILTER_ON: # DEBUG
+            # 这个log只反映了模型的原始选择
+            model_choice_index = logits.argmax().item() # 模型的选择，无ucb1
+            if danger_action_mask[model_choice_index] > 0:
+                logger.debug(f'Action {all_actions[model_choice_index]} is dangerous. I marked it as executed. Final action: {best_action}')
+            if danger_action_mask[best_action_idx] > 0:
+                logger.warning(f'Action {best_action} is dangerous. But I will execute it anyway.')
+                beutiful_print_command_and_probs(all_actions, action_prob, log_func=logger.debug)
+                logger.debug(f'Danger mask: {danger_action_mask}')
+                logger.debug(f'Action count mask: {masked_state_action_executed_count}')
         state_key = game_state_to_ucb1_key(game_state)
         self.incresase_state_action_count(state_key, best_action)
         if False:
@@ -389,32 +446,6 @@ def valid_all(model: Model, split = 'partial_valid', game_init_func = None):
     average_step = np.mean(steps)
     return score / max_score, average_step
 
-def get_model(checkpoint_path = None, init_func = Model):
-    model = init_func()
-    model.prefix = 'roberta_theirs'
-    model.init_bert()
-    if checkpoint_path:
-        model.load_checkpoint(checkpoint_path)
-    model.cuda()
-    return model
-
-def test_trained(repeat = 3):
-    INIC_FUNC = Model_ucb1
-    ucb1_on = 'with UCB1' if INIC_FUNC == Model_ucb1 else 'w/o UCB1'
-    logger.error(f'vvvvv\nTesting trained models {ucb1_on}')
-    logger.error(f'Best models: {BEST_MODELS}')
-    # FULL_VALID_SPLIT = 'fake_test'
-    TEST_SPLIT = 'random_10_test' # NOTE: 2025.7.7 使用随机的10个测试集来验证
-    for rp in range(repeat):
-        path = f'{SAVE_DIR}/roberta_theirs_repeat_{rp}_epoch_{BEST_MODELS[rp]}.pth'
-        model = get_model(path, init_func=INIC_FUNC)
-        #s1, avg_step = valid_all(model, split=VALID_SPLIT, game_init_func=Game_command_generate_bert_filter)
-        # print(f'Full valid score ({rp}): {s1} {ucb1_on}, average step {avg_step}')
-        # logger.error(f'Full valid score ({rp}): {s1} {ucb1_on}, average step {avg_step}')
-        s2, avg_step = valid_all(model, split=TEST_SPLIT, game_init_func=Game_command_generate_bert_filter)
-        print(f'Full test score ({rp}): {s2} {ucb1_on}, average step {avg_step}')
-        logger.error(f'Full test score ({rp}): {s2} {ucb1_on}, average step {avg_step}')
-
 def valid_all_keep_individual_scores(model: Model, split = 'partial_valid', game_init_func = None):
     if game_init_func is None:
         game_init_func = GAME_INIT_FUNC
@@ -432,6 +463,33 @@ def valid_all_keep_individual_scores(model: Model, split = 'partial_valid', game
     average_step = np.mean(steps)
     return scores, average_step
 
+def get_model(checkpoint_path = None, init_func = Model):
+    model = init_func()
+    model.prefix = 'roberta_theirs'
+    model.init_bert()
+    if checkpoint_path:
+        model.load_checkpoint(checkpoint_path)
+    model.cuda()
+    return model
+
+def test_trained(repeat = 3): # default: 3
+    INIC_FUNC = Model_ucb1
+    ucb1_on = 'with UCB1' if INIC_FUNC == Model_ucb1 else 'w/o UCB1'
+    logger.error(f'vvvvv\nTesting trained models {ucb1_on}')
+    logger.error(f'Best models: {BEST_MODELS}')
+    logger.error(f'UCB1')
+    # FULL_VALID_SPLIT = 'fake_test'
+    # TEST_SPLIT = 'fake_test'
+    for rp in range(repeat):
+        path = f'{SAVE_DIR}/roberta_theirs_repeat_{rp}_epoch_{BEST_MODELS[rp]}.pth'
+        model = get_model(path, init_func=INIC_FUNC)
+        s1, avg_step = valid_all(model, split=VALID_SPLIT, game_init_func=Game_command_generate_bert_filter)
+        print(f'Full valid score ({rp}): {s1} {ucb1_on}, average step {avg_step}')
+        logger.error(f'Full valid score ({rp}): {s1} {ucb1_on}, average step {avg_step}')
+        s2, avg_step = valid_all(model, split=TEST_SPLIT, game_init_func=Game_command_generate_bert_filter)
+        print(f'Full test score ({rp}): {s2} {ucb1_on}, average step {avg_step}')
+        logger.error(f'Full test score ({rp}): {s2} {ucb1_on}, average step {avg_step}')
+
 def test_trained_individual_scores(repeat = 3):
     INIC_FUNC = Model_ucb1
     ucb1_on = 'with UCB1' if INIC_FUNC == Model_ucb1 else 'w/o UCB1'
@@ -443,11 +501,11 @@ def test_trained_individual_scores(repeat = 3):
         path = f'{SAVE_DIR}/roberta_theirs_repeat_{rp}_epoch_{BEST_MODELS[rp]}.pth'
         model = get_model(path, init_func=INIC_FUNC)
         scores, avg_step = valid_all_keep_individual_scores(model, split=VALID_SPLIT, game_init_func=Game_command_generate_bert_filter)
-        print(f'Theirs: Full valid scores ({rp}): {scores} {ucb1_on}, average step {avg_step}')
-        logger.error(f'Theirs: Full valid scores ({rp}): {scores} {ucb1_on}, average step {avg_step}')
+        print(f'Ours: Full valid scores ({rp}): {scores} {ucb1_on}, average step {avg_step}')
+        logger.error(f'Ours: Full valid scores ({rp}): {scores} {ucb1_on}, average step {avg_step}')
         scores, avg_step = valid_all_keep_individual_scores(model, split=TEST_SPLIT, game_init_func=Game_command_generate_bert_filter)
-        print(f'Theirs: Full test scores ({rp}): {scores} {ucb1_on}, average step {avg_step}')
-        logger.error(f'Theirs: Full test scores ({rp}): {scores} {ucb1_on}, average step {avg_step}')
+        print(f'Ours: Full test scores ({rp}): {scores} {ucb1_on}, average step {avg_step}')
+        logger.error(f'Ours: Full test scores ({rp}): {scores} {ucb1_on}, average step {avg_step}')
 
 
 def night_run():

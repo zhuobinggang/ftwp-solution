@@ -1,0 +1,107 @@
+Task: Find and examine the cookbook, follow the instructions to prepare the meal, and eat it.
+Room: Kitchen
+Inventory: empty. Total 0 items.
+Recipe: missing
+Available actions:
+0 open fridge
+1 examine cookbook
+Next action (answer with the action directly):
+
+1 examine cookbook
+
+
+Executed action 1: examine cookbook
+Room: Kitchen
+Inventory: empty. Total 0 items.
+Recipe: Ingredients: yellow apple yellow potato Directions: chop the yellow apple fry the yellow apple fry the yellow potato prepare meal
+Available actions:
+0 take yellow potato
+1 open fridge
+2 take yellow apple
+3 take knife
+Next action (answer with the action directly):
+
+2 take yellow apple
+
+
+Executed action 2: take yellow apple
+Reward received: 1
+Room: Kitchen
+Inventory: a yellow apple. Total 1 items.
+Recipe: Ingredients: yellow apple yellow potato Directions: chop the yellow apple fry the yellow apple fry the yellow potato prepare meal
+Available actions:
+0 cook yellow apple with oven
+1 open fridge
+2 take yellow potato
+3 cook yellow apple with stove
+4 take knife
+5 drop yellow apple
+Next action (answer with the action directly):
+
+4 take knife
+
+
+Executed action 3: take knife
+Reward received: 1
+Room: Kitchen
+Inventory: a knife, a yellow apple. Total 2 items.
+Recipe: Ingredients: yellow apple yellow potato Directions: chop the yellow apple fry the yellow apple fry the yellow potato prepare meal
+Available actions:
+0 take yellow potato
+1 cook yellow apple with oven
+2 open fridge
+3 chop yellow apple with knife
+4 slice yellow apple with knife
+5 cook yellow apple with stove
+6 drop yellow apple
+7 dice yellow apple with knife
+8 drop knife
+Next action (answer with the action directly):
+
+3 chop yellow apple with knife
+
+
+Executed action 4: chop yellow apple with knife
+Reward received: 2
+Room: Kitchen
+Inventory: a knife, a chopped yellow apple. Total 2 items.
+Recipe: Ingredients: yellow apple yellow potato Directions: chop the yellow apple fry the yellow apple fry the yellow potato prepare meal
+Available actions:
+0 drop yellow apple
+1 open fridge
+2 chop yellow apple with knife
+3 cook yellow apple with stove
+4 slice yellow apple with knife
+5 take yellow potato
+6 cook yellow apple with oven
+7 drop knife
+8 dice yellow apple with knife
+Next action (answer with the action directly):
+
+5 take yellow potato
+
+
+Executed action 5: take yellow potato
+Reward received: 3
+Room: Kitchen
+Inventory: a knife, a chopped yellow apple, a raw yellow potato. Total 3 items.
+Recipe: Ingredients: yellow apple yellow potato Directions: chop the yellow apple fry the yellow apple fry the yellow potato prepare meal
+Available actions:
+0 slice yellow potato with knife
+1 slice yellow apple with knife
+2 open fridge
+3 dice yellow apple with knife
+4 cook yellow potato with oven
+5 drop knife
+6 prepare meal
+7 drop yellow potato
+8 dice yellow potato with knife
+9 cook yellow apple with stove
+10 drop yellow apple
+11 cook yellow apple with oven
+12 cook yellow potato with stove
+13 chop yellow apple with knife
+14 chop yellow potato with knife
+Next action (answer with the action directly):
+
+14 chop yellow potato with knife

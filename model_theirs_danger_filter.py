@@ -214,6 +214,33 @@ def ucb1(action_cnt, total_cnt):
     else:
         return np.sqrt(2*np.log(total_cnt)/action_cnt) # 如果total_cnt=10, action_cnt=1，值大概为2.15，总之都不会比2.5大的感觉。
 
+
+def draw_chart():
+    import matplotlib.pyplot as plt
+    import numpy as np
+    # 全体の試行回数 n（log項に使う）
+    n_total = 100
+    # n_i の値（1〜100）
+    n_i_values = np.arange(1, 101)
+    # 平均報酬は一定と仮定（例：0.5）
+    avg_reward = 0
+    # UCB1スコア計算（n_i > 0 の場合）
+    ucb_scores = avg_reward + np.sqrt(2 * np.log(n_total) / n_i_values)
+    # n_i = 0 のときのスコア
+    ucb_zero = avg_reward + 5
+    # グラフ描画
+    plt.figure(figsize=(8, 5))
+    plt.plot(n_i_values, ucb_scores, label="UCB1 (n_i > 0)")
+    plt.axhline(y=ucb_zero, color='r', linestyle='--', label="UCB1 (n_i = 0)")
+    plt.title("UCB1 Score vs. n_i (n_total = 100)")
+    plt.xlabel("n_i (number of times arm i was selected)")
+    plt.ylabel("UCB1 Score")
+    plt.legend()
+    plt.grid(True)
+    plt.tight_layout()
+    plt.show()
+
+
 def maxmin_norm(p): # 返回0-1之间的值
     return (p - p.min())/(p.max() - p.min())
 
@@ -308,9 +335,15 @@ class Model_ucb1(Model):
         best_action_idx, action_prob = choose_action_ubc1(logits, masked_state_action_executed_count)
         best_action = all_actions[best_action_idx]
         if DANGER_FILTER_ON: # DEBUG
-            model_choice_index = logits.argmax().item()
+            # 这个log只反映了模型的原始选择
+            model_choice_index = logits.argmax().item() # 模型的选择，无ucb1
             if danger_action_mask[model_choice_index] == 1:
                 logger.warning(f'Action {all_actions[model_choice_index]} is dangerous. I marked it as executed. Final action: {best_action}')
+            if danger_action_mask[best_action_idx] == 1:
+                logger.error(f'Action {best_action} is dangerous. But I will execute it anyway.')
+                beutiful_print_command_and_probs(all_actions, action_prob, log_func=logger.debug)
+                logger.warning(f'Danger mask: {danger_action_mask}')
+                logger.warning(f'Action count mask: {masked_state_action_executed_count}')
         state_key = game_state_to_ucb1_key(game_state)
         self.incresase_state_action_count(state_key, best_action)
         if False:
@@ -409,6 +442,23 @@ def valid_all(model: Model, split = 'partial_valid', game_init_func = None):
     average_step = np.mean(steps)
     return score / max_score, average_step
 
+def valid_all_keep_individual_scores(model: Model, split = 'partial_valid', game_init_func = None):
+    if game_init_func is None:
+        game_init_func = GAME_INIT_FUNC
+        assert GAME_INIT_FUNC == Game_command_generate_bert_filter, '默认使用bert来过滤合成的动作'
+    game_paths = get_cv_games(split=split)
+    scores = []
+    steps = []
+    logger.debug(f'Validating {split} games, total {len(game_paths)}')
+    for game_path in tqdm(game_paths, desc=f"Validating {split} games"):
+        game = game_init_func(game_path)
+        result = test_game(game, model, max_step=MAX_TEST_STEP)
+        scores.append(result.score /  result.max_score)
+        steps.append(result.step)
+        # dbg(f'Valid results,  {result.score} / {result.max_score}, steps {result.step}, game {game_path}')
+    average_step = np.mean(steps)
+    return scores, average_step
+
 def get_model(checkpoint_path = None, init_func = Model):
     model = init_func()
     model.prefix = 'roberta_theirs'
@@ -425,15 +475,33 @@ def test_trained(repeat = 3):
     logger.error(f'Best models: {BEST_MODELS}')
     # FULL_VALID_SPLIT = 'fake_test'
     # TEST_SPLIT = 'fake_test'
+    TEST_SPLIT = 'random_10_test'
     for rp in range(repeat):
         path = f'{SAVE_DIR}/roberta_theirs_repeat_{rp}_epoch_{BEST_MODELS[rp]}.pth'
         model = get_model(path, init_func=INIC_FUNC)
-        s1, avg_step = valid_all(model, split=VALID_SPLIT, game_init_func=Game_command_generate_bert_filter)
-        print(f'Full valid score ({rp}): {s1} {ucb1_on}, average step {avg_step}')
-        logger.error(f'Full valid score ({rp}): {s1} {ucb1_on}, average step {avg_step}')
-        # s2, avg_step = valid_all(model, split=TEST_SPLIT, game_init_func=Game_command_generate_bert_filter)
-        # print(f'Full test score ({rp}): {s2} {ucb1_on}, average step {avg_step}')
-        # logger.error(f'Full test score ({rp}): {s2} {ucb1_on}, average step {avg_step}')
+        # s1, avg_step = valid_all(model, split=VALID_SPLIT, game_init_func=Game_command_generate_bert_filter)
+        # print(f'Full valid score ({rp}): {s1} {ucb1_on}, average step {avg_step}')
+        # logger.error(f'Full valid score ({rp}): {s1} {ucb1_on}, average step {avg_step}')
+        s2, avg_step = valid_all(model, split=TEST_SPLIT, game_init_func=Game_command_generate_bert_filter)
+        print(f'Full test score ({rp}): {s2} {ucb1_on}, average step {avg_step}')
+        logger.error(f'Full test score ({rp}): {s2} {ucb1_on}, average step {avg_step}')
+
+def test_trained_individual_scores(repeat = 3):
+    INIC_FUNC = Model_ucb1
+    ucb1_on = 'with UCB1' if INIC_FUNC == Model_ucb1 else 'w/o UCB1'
+    logger.error(f'vvvvv\nTesting trained models {ucb1_on}')
+    logger.error(f'Best models: {BEST_MODELS}')
+    # FULL_VALID_SPLIT = 'fake_test'
+    # TEST_SPLIT = 'fake_test'
+    for rp in range(repeat):
+        path = f'{SAVE_DIR}/roberta_theirs_repeat_{rp}_epoch_{BEST_MODELS[rp]}.pth'
+        model = get_model(path, init_func=INIC_FUNC)
+        scores, avg_step = valid_all_keep_individual_scores(model, split=VALID_SPLIT, game_init_func=Game_command_generate_bert_filter)
+        print(f'Ours: Full valid scores ({rp}): {scores} {ucb1_on}, average step {avg_step}')
+        logger.error(f'Ours: Full valid scores ({rp}): {scores} {ucb1_on}, average step {avg_step}')
+        scores, avg_step = valid_all_keep_individual_scores(model, split=TEST_SPLIT, game_init_func=Game_command_generate_bert_filter)
+        print(f'Ours: Full test scores ({rp}): {scores} {ucb1_on}, average step {avg_step}')
+        logger.error(f'Ours: Full test scores ({rp}): {scores} {ucb1_on}, average step {avg_step}')
 
 
 def night_run():

@@ -52,7 +52,7 @@ def save_centroids():
 
 @lru_cache(maxsize=4)
 def read_centroids():
-    print('read centroids from file')
+    # print('read centroids from file')
     a = np.fromfile(OPENABLE_CENTROID_PATH, dtype=float)
     b = np.fromfile(UNOPENABLE_CENTROID_PATH, dtype=float)
     return a, b

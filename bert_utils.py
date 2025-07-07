@@ -45,8 +45,9 @@ def init_bert_ours():
     # return BertForMaskedLM.from_pretrained(BERT_BASE_UNCASED_MODEL_ID)
     return RobertaForMaskedLM.from_pretrained(ROBERTA_BASE_UNCASED_MODEL_ID)
 
-def bert_prompt_from_game_state(game_state: Game_state, need_action_history = True):
-    seperater = special_tokens_dict().sep
+def bert_prompt_from_game_state(game_state: Game_state, need_action_history = True, seperater = None):
+    if not seperater:
+        seperater = special_tokens_dict().sep
     x = ''
     x += f"Room: {game_state.room} {seperater}"
     inventory_text = game_state.inventory_clean().strip()

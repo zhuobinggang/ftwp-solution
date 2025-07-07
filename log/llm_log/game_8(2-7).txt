@@ -1,0 +1,131 @@
+Task: Find and examine the cookbook, follow the instructions to prepare the meal, and eat it.
+Room: Pantry
+Inventory: empty. Total 0 items.
+Recipe: missing
+Available actions:
+0 open plain door
+Next action (answer with the action directly):
+
+0 open plain door
+
+
+Executed action 1: open plain door
+Room: Pantry
+Inventory: empty. Total 0 items.
+Recipe: missing
+Available actions:
+0 go south
+Next action (answer with the action directly):
+
+0 go south
+
+
+Executed action 2: go south
+Room: Kitchen
+Inventory: empty. Total 0 items.
+Recipe: missing
+Available actions:
+0 examine cookbook
+1 go north
+2 open fridge
+3 go east
+Next action (answer with the action directly):
+
+0 examine cookbook
+
+
+Executed action 3: examine cookbook
+Room: Kitchen
+Inventory: empty. Total 0 items.
+Recipe: Ingredients: red apple red onion yellow potato Directions: roast the red apple chop the red onion slice the yellow potato roast the yellow potato prepare meal
+Available actions:
+0 take knife
+1 open fridge
+2 take red apple
+3 go east
+4 go north
+5 take yellow potato
+Next action (answer with the action directly):
+
+0 take knife
+
+
+Executed action 4: take knife
+Room: Kitchen
+Inventory: a knife. Total 1 items.
+Recipe: Ingredients: red apple red onion yellow potato Directions: roast the red apple chop the red onion slice the yellow potato roast the yellow potato prepare meal
+Available actions:
+0 take red apple
+1 drop knife
+2 open fridge
+3 go north
+4 take yellow potato
+5 go east
+Next action (answer with the action directly):
+
+2 open fridge
+
+
+Executed action 5: open fridge
+Room: Kitchen
+Inventory: a knife. Total 1 items.
+Recipe: Ingredients: red apple red onion yellow potato Directions: roast the red apple chop the red onion slice the yellow potato roast the yellow potato prepare meal
+Available actions:
+0 drop knife
+1 take red apple
+2 go north
+3 go east
+4 take red onion
+5 take yellow potato
+Next action (answer with the action directly):
+
+1 take red apple
+
+
+Executed action 6: take red apple
+Reward received: 1
+Room: Kitchen
+Inventory: a knife, a roasted red apple. Total 2 items.
+Recipe: Ingredients: red apple red onion yellow potato Directions: roast the red apple chop the red onion slice the yellow potato roast the yellow potato prepare meal
+Available actions:
+0 drop knife
+1 cook red apple with oven
+2 dice red apple with knife
+3 go north
+4 take yellow potato
+5 slice red apple with knife
+6 take red onion
+7 go east
+8 chop red apple with knife
+9 cook red apple with stove
+10 drop red apple
+Next action (answer with the action directly):
+
+6 take red onion
+
+
+Executed action 7: take red onion
+Reward received: 2
+Room: Kitchen
+Inventory: a knife, a red onion, a roasted red apple. Total 3 items.
+Recipe: Ingredients: red apple red onion yellow potato Directions: roast the red apple chop the red onion slice the yellow potato roast the yellow potato prepare meal
+Available actions:
+0 cook red apple with oven
+1 cook red apple with stove
+2 take yellow potato
+3 slice red apple with knife
+4 drop red onion
+5 drop knife
+6 go east
+7 chop red apple with knife
+8 dice red onion with knife
+9 drop red apple
+10 go north
+11 cook red onion with oven
+12 dice red apple with knife
+13 cook red onion with stove
+14 slice red onion with knife
+15 chop red onion with knife
+Next action (answer with the action directly):
+
+8 dice red onion with knife

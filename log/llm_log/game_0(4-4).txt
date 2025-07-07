@@ -1,0 +1,300 @@
+Task: Find and examine the cookbook, follow the instructions to prepare the meal, and eat it.
+Room: Corridor
+Inventory: a red onion, a white onion, a raw red potato. Total 3 items.
+Recipe: missing
+Available actions:
+0 go south
+1 drop red onion
+2 drop white onion
+3 go east
+4 go west
+5 drop red potato
+Next action (answer with the action directly):
+
+0
+
+
+Executed action 1: go south
+Room: Livingroom
+Inventory: a red onion, a white onion, a raw red potato. Total 3 items.
+Recipe: missing
+Available actions:
+0 go north
+1 drop red potato
+2 drop white onion
+3 drop red onion
+4 go south
+Next action (answer with the action directly):
+
+4
+
+
+Executed action 2: go south
+Room: Bedroom
+Inventory: a red onion, a white onion, a raw red potato. Total 3 items.
+Recipe: missing
+Available actions:
+0 drop red potato
+1 drop white onion
+2 go north
+3 drop red onion
+Next action (answer with the action directly):
+
+2
+
+
+Executed action 3: go north
+Room: Livingroom
+Inventory: a red onion, a white onion, a raw red potato. Total 3 items.
+Recipe: missing
+Available actions:
+0 go north
+1 drop red onion
+2 drop white onion
+3 go south
+4 drop red potato
+Next action (answer with the action directly):
+
+0
+
+
+Executed action 4: go north
+Room: Corridor
+Inventory: a red onion, a white onion, a raw red potato. Total 3 items.
+Recipe: missing
+Available actions:
+0 drop white onion
+1 go west
+2 drop red onion
+3 go south
+4 drop red potato
+5 go east
+Next action (answer with the action directly):
+
+5
+
+
+Executed action 5: go east
+Room: Kitchen
+Inventory: a red onion, a white onion, a raw red potato. Total 3 items.
+Recipe: missing
+Available actions:
+0 examine cookbook
+1 drop red potato
+2 go south
+3 drop red onion
+4 drop white onion
+5 go west
+Next action (answer with the action directly):
+
+0
+
+
+Executed action 6: examine cookbook
+Room: Kitchen
+Inventory: a red onion, a white onion, a raw red potato. Total 3 items.
+Recipe: Ingredients: red onion Directions: chop the red onion fry the red onion prepare meal
+Available actions:
+0 go west
+1 prepare meal
+2 drop red onion
+3 cook red onion with oven
+4 take knife
+5 go south
+6 cook red onion with stove
+7 drop red potato
+8 drop white onion
+Next action (answer with the action directly):
+
+4
+
+
+Executed action 7: take knife
+You're carrying too many things already!
+Room: Kitchen
+Inventory: a red onion, a white onion, a raw red potato. Total 3 items.
+Recipe: Ingredients: red onion Directions: chop the red onion fry the red onion prepare meal
+Available actions:
+0 drop red onion
+1 prepare meal
+2 cook red onion with oven
+3 go west
+4 drop red potato
+5 take knife
+6 go south
+7 drop white onion
+8 cook red onion with stove
+Next action (answer with the action directly):
+
+0
+
+
+Executed action 7: drop red onion
+Room: Kitchen
+Inventory: a white onion, a raw red potato. Total 2 items.
+Recipe: Ingredients: red onion Directions: chop the red onion fry the red onion prepare meal
+Available actions:
+0 drop red potato
+1 take knife
+2 go west
+3 drop white onion
+4 take red onion
+5 go south
+Next action (answer with the action directly):
+
+1
+
+
+Executed action 8: take knife
+You're carrying too many things already!
+Room: Kitchen
+Inventory: a white onion, a raw red potato. Total 2 items.
+Recipe: Ingredients: red onion Directions: chop the red onion fry the red onion prepare meal
+Available actions:
+0 take knife
+1 take red onion
+2 drop white onion
+3 drop red potato
+4 go south
+5 go west
+Next action (answer with the action directly):
+
+2
+
+
+Executed action 8: drop white onion
+Room: Kitchen
+Inventory: a raw red potato. Total 1 items.
+Recipe: Ingredients: red onion Directions: chop the red onion fry the red onion prepare meal
+Available actions:
+0 take knife
+1 go south
+2 drop red potato
+3 go west
+4 take red onion
+Next action (answer with the action directly):
+
+0
+
+
+Executed action 9: take knife
+Room: Kitchen
+Inventory: a knife, a raw red potato. Total 2 items.
+Recipe: Ingredients: red onion Directions: chop the red onion fry the red onion prepare meal
+Available actions:
+0 drop red potato
+1 go west
+2 go south
+3 take red onion
+4 drop knife
+Next action (answer with the action directly):
+
+3
+
+
+Executed action 10: take red onion
+You're carrying too many things already!
+Room: Kitchen
+Inventory: a knife, a raw red potato. Total 2 items.
+Recipe: Ingredients: red onion Directions: chop the red onion fry the red onion prepare meal
+Available actions:
+0 take red onion
+1 go west
+2 drop red potato
+3 drop knife
+4 go south
+Next action (answer with the action directly):
+
+2
+
+
+Executed action 10: drop red potato
+Room: Kitchen
+Inventory: a knife. Total 1 items.
+Recipe: Ingredients: red onion Directions: chop the red onion fry the red onion prepare meal
+Available actions:
+0 take red onion
+1 go south
+2 go west
+3 drop knife
+Next action (answer with the action directly):
+
+0
+
+
+Executed action 11: take red onion
+Room: Kitchen
+Inventory: a red onion, a knife. Total 2 items.
+Recipe: Ingredients: red onion Directions: chop the red onion fry the red onion prepare meal
+Available actions:
+0 slice red onion with knife
+1 prepare meal
+2 cook red onion with oven
+3 drop knife
+4 go south
+5 drop red onion
+6 go west
+7 cook red onion with stove
+8 dice red onion with knife
+9 chop red onion with knife
+Next action (answer with the action directly):
+
+9
+
+
+Executed action 12: chop red onion with knife
+Reward received: 1
+Room: Kitchen
+Inventory: a knife, a chopped red onion. Total 2 items.
+Recipe: Ingredients: red onion Directions: chop the red onion fry the red onion prepare meal
+Available actions:
+0 prepare meal
+1 go south
+2 go west
+3 cook red onion with stove
+4 cook red onion with oven
+5 slice red onion with knife
+6 drop red onion
+7 chop red onion with knife
+8 dice red onion with knife
+9 drop knife
+Next action (answer with the action directly):
+
+3
+
+
+Executed action 13: cook red onion with stove
+Reward received: 2
+Room: Kitchen
+Inventory: a chopped fried red onion, a knife. Total 2 items.
+Recipe: Ingredients: red onion Directions: chop the red onion fry the red onion prepare meal
+Available actions:
+0 cook red onion with oven
+1 chop red onion with knife
+2 drop red onion
+3 prepare meal
+4 slice red onion with knife
+5 go west
+6 go south
+7 cook red onion with stove
+8 dice red onion with knife
+9 drop knife
+Next action (answer with the action directly):
+
+3
+
+
+Executed action 14: prepare meal
+Reward received: 3
+Room: Kitchen
+Inventory: a knife, a meal. Total 2 items.
+Recipe: Ingredients: red onion Directions: chop the red onion fry the red onion prepare meal
+Available actions:
+0 go south
+1 drop knife
+2 drop meal
+3 eat meal
+4 go west
+Next action (answer with the action directly):
+
+3

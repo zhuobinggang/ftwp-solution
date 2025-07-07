@@ -1,0 +1,39 @@
+Task: Find and examine the cookbook, follow the instructions to prepare the meal, and eat it.
+Room: Kitchen
+Inventory: some water. Total 1 items.
+Recipe: missing
+Available actions:
+0 drop water
+1 examine cookbook
+Next action (answer with the action directly):
+
+1 examine cookbook
+
+
+Executed action 1: examine cookbook
+Room: Kitchen
+Inventory: some water. Total 1 items.
+Recipe: Ingredients: water Directions: prepare meal
+Available actions:
+0 cook water with oven
+1 cook water with stove
+2 take knife
+3 drop water
+4 prepare meal
+Next action (answer with the action directly):
+
+4 prepare meal
+
+
+Executed action 2: prepare meal
+Reward received: 1
+Room: Kitchen
+Inventory: a meal. Total 1 items.
+Recipe: Ingredients: water Directions: prepare meal
+Available actions:
+0 eat meal
+1 take knife
+2 drop meal
+Next action (answer with the action directly):
+
+0 eat meal

@@ -1,0 +1,24 @@
+Task: Find and examine the cookbook, follow the instructions to prepare the meal, and eat it.
+Room: Kitchen
+Inventory: a sliced block of cheese. Total 1 items.
+Recipe: missing
+Available actions:
+0 drop block of cheese
+1 examine cookbook
+Next action (answer with the action directly):
+
+1 examine cookbook
+
+
+Executed action 1: examine cookbook
+Room: Kitchen
+Inventory: a sliced block of cheese. Total 1 items.
+Recipe: Ingredients: block of cheese Directions: slice the block of cheese roast the block of cheese prepare meal
+Available actions:
+0 cook block of cheese with stove
+1 prepare meal
+2 drop block of cheese
+3 cook block of cheese with oven
+Next action (answer with the action directly):
+
+0 cook block of cheese with stove

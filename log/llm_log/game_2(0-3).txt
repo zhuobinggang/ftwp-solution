@@ -1,0 +1,67 @@
+Task: Find and examine the cookbook, follow the instructions to prepare the meal, and eat it.
+Room: Driveway
+Inventory: a yellow bell pepper, a raw red tuna, a red bell pepper. Total 3 items.
+Recipe: missing
+Available actions:
+0 go west
+1 drop yellow bell pepper
+2 drop red bell pepper
+3 go north
+4 drop red tuna
+Next action (answer with the action directly):
+
+0 go west
+
+
+Executed action 1: go west
+Room: Livingroom
+Inventory: a yellow bell pepper, a raw red tuna, a red bell pepper. Total 3 items.
+Recipe: missing
+Available actions:
+0 go east
+1 go west
+2 drop yellow bell pepper
+3 drop red tuna
+4 drop red bell pepper
+Next action (answer with the action directly):
+
+1 go west
+
+
+Executed action 2: go west
+Room: Kitchen
+Inventory: a yellow bell pepper, a raw red tuna, a red bell pepper. Total 3 items.
+Recipe: missing
+Available actions:
+0 go east
+1 drop red tuna
+2 drop yellow bell pepper
+3 examine cookbook
+4 go north
+5 drop red bell pepper
+6 go south
+7 go west
+Next action (answer with the action directly):
+
+3 examine cookbook
+
+
+Executed action 3: examine cookbook
+Room: Kitchen
+Inventory: a yellow bell pepper, a raw red tuna, a red bell pepper. Total 3 items.
+Recipe: Ingredients: red bell pepper Directions: grill the red bell pepper prepare meal
+Available actions:
+0 go west
+1 cook red bell pepper with stove
+2 drop red bell pepper
+3 take knife
+4 go south
+5 go north
+6 drop yellow bell pepper
+7 cook red bell pepper with oven
+8 prepare meal
+9 drop red tuna
+10 go east
+Next action (answer with the action directly):
+
+7 cook red bell pepper with oven

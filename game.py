@@ -241,7 +241,7 @@ def test_game(game: Game_move_action_augment, model = Fake_model(), max_step = 1
         if done:
             break
     # result = (counter, info['score'], info['max_score'], info)
-    dbg(f'Game done: {info["score"]} / {info["max_score"]}, steps {counter}, won: {info["won"]}, lost: {info["lost"]}, path: {game.game_path}')
+    logger.warning(f'Game done: {info["score"]} / {info["max_score"]}, steps {counter}, won: {info["won"]}, lost: {info["lost"]}, path: {game.game_path}')
     if info['lost']:
         from model_danger_command import use_bert_to_identify_danger_command
         is_danger = use_bert_to_identify_danger_command(game_state.recipe_clean(), final_action, logging=True)
@@ -308,6 +308,9 @@ class Game_state:
         return f'Game_state(room={self.room}, description={self.description_clean()}, recipe={self.recipe_clean()}, inventory={self.inventory_clean()}, action_obs_pairs={self.action_history()}, admissible_commands={self.available_commands_text()})'
 
 
+# 测试用
+ACTION_ELIMINATE_ON = False
+
 def game_state_from_game(game: Game_handle_worldmap, need_admissible_commands = True):
     state = Game_state()
     state.room = common.extract_room_name(game.info['description'])
@@ -319,6 +322,8 @@ def game_state_from_game(game: Game_handle_worldmap, need_admissible_commands = 
         state.admissible_commands = game.get_admissible_commands() # NOTE: 4.21 Game将代理取得可能选项
     if hasattr(game, 'worldMap'):
         state.worldMap = game.worldMap
+    if ACTION_ELIMINATE_ON:
+        state.walkthrough = game.info['extra.walkthrough']
     return state
 
 

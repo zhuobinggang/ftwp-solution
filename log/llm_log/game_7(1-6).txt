@@ -1,0 +1,185 @@
+Task: Find and examine the cookbook, follow the instructions to prepare the meal, and eat it.
+Room: Bedroom
+Inventory: empty. Total 0 items.
+Recipe: missing
+Available actions:
+0 go north
+1 go south
+Next action (answer with the action directly):
+
+0 go north
+
+
+Executed action 1: go north
+Room: Corridor
+Inventory: empty. Total 0 items.
+Recipe: missing
+Available actions:
+0 go south
+1 go west
+2 go east
+Next action (answer with the action directly):
+
+1 go west
+
+
+Executed action 2: go west
+Room: Bathroom
+Inventory: empty. Total 0 items.
+Recipe: missing
+Available actions:
+0 go east
+Next action (answer with the action directly):
+
+0 go east
+
+
+Executed action 3: go east
+Room: Corridor
+Inventory: empty. Total 0 items.
+Recipe: missing
+Available actions:
+0 go east
+1 go south
+2 go west
+Next action (answer with the action directly):
+
+0 go east
+
+
+Executed action 4: go east
+Room: Backyard
+Inventory: empty. Total 0 items.
+Recipe: missing
+Available actions:
+0 go west
+1 go north
+2 go south
+Next action (answer with the action directly):
+
+1 go north
+
+
+Executed action 5: go north
+Room: Garden
+Inventory: empty. Total 0 items.
+Recipe: missing
+Available actions:
+0 go south
+Next action (answer with the action directly):
+
+0 go south
+
+
+Executed action 6: go south
+Room: Backyard
+Inventory: empty. Total 0 items.
+Recipe: missing
+Available actions:
+0 go north
+1 go west
+2 go south
+Next action (answer with the action directly):
+
+1 go west
+
+
+Executed action 7: go west
+Room: Corridor
+Inventory: empty. Total 0 items.
+Recipe: missing
+Available actions:
+0 go west
+1 go south
+2 go east
+Next action (answer with the action directly):
+
+1 go south
+
+
+Executed action 8: go south
+Room: Bedroom
+Inventory: empty. Total 0 items.
+Recipe: missing
+Available actions:
+0 go north
+1 go south
+Next action (answer with the action directly):
+
+1 go south
+
+
+Executed action 9: go south
+Room: Livingroom
+Inventory: empty. Total 0 items.
+Recipe: missing
+Available actions:
+0 go north
+1 go west
+Next action (answer with the action directly):
+
+1 go west
+
+
+Executed action 10: go west
+Room: Kitchen
+Inventory: empty. Total 0 items.
+Recipe: missing
+Available actions:
+0 go north
+1 go east
+2 examine cookbook
+Next action (answer with the action directly):
+
+2 examine cookbook
+
+
+Executed action 11: examine cookbook
+Room: Kitchen
+Inventory: empty. Total 0 items.
+Recipe: Ingredients: red apple yellow potato Directions: fry the red apple fry the yellow potato prepare meal
+Available actions:
+0 go north
+1 take red apple
+2 go east
+3 take knife
+Next action (answer with the action directly):
+
+1 take red apple
+
+
+Executed action 12: take red apple
+Reward received: 1
+Room: Kitchen
+Inventory: a red apple. Total 1 items.
+Recipe: Ingredients: red apple yellow potato Directions: fry the red apple fry the yellow potato prepare meal
+Available actions:
+0 take knife
+1 drop red apple
+2 cook red apple with stove
+3 cook red apple with oven
+4 go east
+5 go north
+Next action (answer with the action directly):
+
+0 take knife
+
+
+Executed action 13: take knife
+Reward received: 1
+Room: Kitchen
+Inventory: a red apple, a knife. Total 2 items.
+Recipe: Ingredients: red apple yellow potato Directions: fry the red apple fry the yellow potato prepare meal
+Available actions:
+0 drop red apple
+1 slice red apple with knife
+2 dice red apple with knife
+3 cook red apple with oven
+4 go north
+5 chop red apple with knife
+6 go east
+7 drop knife
+8 cook red apple with stove
+Next action (answer with the action directly):
+
+1 slice red apple with knife

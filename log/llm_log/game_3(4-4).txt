@@ -1,0 +1,139 @@
+Task: Find and examine the cookbook, follow the instructions to prepare the meal, and eat it.
+Room: Garden
+Inventory: a carrot. Total 1 items.
+Recipe: missing
+Available actions:
+0 drop carrot
+1 go west
+Next action (answer with the action directly):
+
+1 go west
+
+
+Executed action 1: go west
+Room: Backyard
+Inventory: a carrot. Total 1 items.
+Recipe: missing
+Available actions:
+0 go south
+1 go east
+2 drop carrot
+3 go north
+Next action (answer with the action directly):
+
+3 go north
+
+
+Executed action 2: go north
+Room: Kitchen
+Inventory: a carrot. Total 1 items.
+Recipe: missing
+Available actions:
+0 go east
+1 examine cookbook
+2 go south
+3 drop carrot
+4 go north
+Next action (answer with the action directly):
+
+1 examine cookbook
+
+
+Executed action 3: examine cookbook
+Room: Kitchen
+Inventory: a carrot. Total 1 items.
+Recipe: Ingredients: carrot Directions: dice the carrot roast the carrot prepare meal
+Available actions:
+0 cook carrot with stove
+1 drop carrot
+2 go south
+3 go north
+4 take knife
+5 go east
+6 cook carrot with oven
+7 prepare meal
+Next action (answer with the action directly):
+
+4 take knife
+
+
+Executed action 4: take knife
+Room: Kitchen
+Inventory: a carrot, a knife. Total 2 items.
+Recipe: Ingredients: carrot Directions: dice the carrot roast the carrot prepare meal
+Available actions:
+0 slice carrot with knife
+1 drop knife
+2 dice carrot with knife
+3 go north
+4 cook carrot with oven
+5 prepare meal
+6 drop carrot
+7 go south
+8 cook carrot with stove
+9 go east
+10 chop carrot with knife
+Next action (answer with the action directly):
+
+2 dice carrot with knife
+
+
+Executed action 5: dice carrot with knife
+Reward received: 1
+Room: Kitchen
+Inventory: a knife, a diced carrot. Total 2 items.
+Recipe: Ingredients: carrot Directions: dice the carrot roast the carrot prepare meal
+Available actions:
+0 cook carrot with oven
+1 chop carrot with knife
+2 drop carrot
+3 go east
+4 go north
+5 prepare meal
+6 cook carrot with stove
+7 drop knife
+8 dice carrot with knife
+9 slice carrot with knife
+10 go south
+Next action (answer with the action directly):
+
+0 cook carrot with oven
+
+
+Executed action 6: cook carrot with oven
+Reward received: 2
+Room: Kitchen
+Inventory: a knife, a diced roasted carrot. Total 2 items.
+Recipe: Ingredients: carrot Directions: dice the carrot roast the carrot prepare meal
+Available actions:
+0 drop carrot
+1 chop carrot with knife
+2 dice carrot with knife
+3 slice carrot with knife
+4 cook carrot with oven
+5 drop knife
+6 go east
+7 cook carrot with stove
+8 prepare meal
+9 go south
+10 go north
+Next action (answer with the action directly):
+
+8 prepare meal
+
+
+Executed action 7: prepare meal
+Reward received: 3
+Room: Kitchen
+Inventory: a knife, a meal. Total 2 items.
+Recipe: Ingredients: carrot Directions: dice the carrot roast the carrot prepare meal
+Available actions:
+0 eat meal
+1 go north
+2 go south
+3 drop meal
+4 drop knife
+5 go east
+Next action (answer with the action directly):
+
+0 eat meal

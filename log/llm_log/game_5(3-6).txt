@@ -1,0 +1,226 @@
+Task: Find and examine the cookbook, follow the instructions to prepare the meal, and eat it.
+Room: Bedroom
+Inventory: a fried chicken wing, a raw chicken leg. Total 2 items.
+Recipe: missing
+Available actions:
+0 go south
+1 drop chicken leg
+2 go east
+3 drop chicken wing
+Next action (answer with the action directly):
+
+0
+
+
+Executed action 1: go south
+Room: Livingroom
+Inventory: a fried chicken wing, a raw chicken leg. Total 2 items.
+Recipe: missing
+Available actions:
+0 drop chicken wing
+1 go north
+2 drop chicken leg
+Next action (answer with the action directly):
+
+2
+
+
+Executed action 2: drop chicken leg
+Room: Livingroom
+Inventory: a fried chicken wing. Total 1 items.
+Recipe: missing
+Available actions:
+0 drop chicken wing
+1 go north
+Next action (answer with the action directly):
+
+1
+
+
+Executed action 3: go north
+Room: Bedroom
+Inventory: a fried chicken wing. Total 1 items.
+Recipe: missing
+Available actions:
+0 go south
+1 drop chicken wing
+2 go east
+Next action (answer with the action directly):
+
+2
+
+
+Executed action 4: go east
+Room: Corridor
+Inventory: a fried chicken wing. Total 1 items.
+Recipe: missing
+Available actions:
+0 go south
+1 drop chicken wing
+2 go east
+3 go west
+Next action (answer with the action directly):
+
+2
+
+
+Executed action 5: go east
+Room: Kitchen
+Inventory: a fried chicken wing. Total 1 items.
+Recipe: missing
+Available actions:
+0 go west
+1 go south
+2 examine cookbook
+3 drop chicken wing
+4 go east
+Next action (answer with the action directly):
+
+2
+
+
+Executed action 6: examine cookbook
+Room: Kitchen
+Inventory: a fried chicken wing. Total 1 items.
+Recipe: Ingredients: carrot chicken wing olive oil red onion yellow bell pepper Directions: dice the carrot grill the carrot fry the chicken wing slice the red onion roast the red onion chop the yellow bell pepper grill the yellow bell pepper prepare meal
+Available actions:
+0 take yellow bell pepper
+1 cook chicken wing with stove
+2 take knife
+3 drop chicken wing
+4 go west
+5 go south
+6 take carrot
+7 take red onion
+8 go east
+9 cook chicken wing with oven
+Next action (answer with the action directly):
+
+6
+
+
+Executed action 7: take carrot
+Reward received: 1
+Room: Kitchen
+Inventory: a diced grilled carrot, a fried chicken wing. Total 2 items.
+Recipe: Ingredients: carrot chicken wing olive oil red onion yellow bell pepper Directions: dice the carrot grill the carrot fry the chicken wing slice the red onion roast the red onion chop the yellow bell pepper grill the yellow bell pepper prepare meal
+Available actions:
+0 cook carrot with oven
+1 go west
+2 drop carrot
+3 take knife
+4 cook chicken wing with oven
+5 cook chicken wing with stove
+6 take yellow bell pepper
+7 go south
+8 drop chicken wing
+9 take red onion
+10 cook carrot with stove
+11 go east
+Next action (answer with the action directly):
+
+9
+
+
+Executed action 8: take red onion
+Reward received: 2
+Room: Kitchen
+Inventory: a diced grilled carrot, a sliced roasted red onion, a fried chicken wing. Total 3 items.
+Recipe: Ingredients: carrot chicken wing olive oil red onion yellow bell pepper Directions: dice the carrot grill the carrot fry the chicken wing slice the red onion roast the red onion chop the yellow bell pepper grill the yellow bell pepper prepare meal
+Available actions:
+0 drop red onion
+1 cook chicken wing with stove
+2 cook carrot with stove
+3 go west
+4 cook carrot with oven
+5 take knife
+6 go south
+7 cook chicken wing with oven
+8 go east
+9 drop chicken wing
+10 take yellow bell pepper
+11 cook red onion with stove
+12 cook red onion with oven
+13 drop carrot
+Next action (answer with the action directly):
+
+10
+
+
+Executed action 9: take yellow bell pepper
+Reward received: 3
+Room: Kitchen
+Inventory: a diced grilled carrot, a chopped grilled yellow bell pepper, a fried chicken wing, a sliced roasted red onion. Total 4 items.
+Recipe: Ingredients: carrot chicken wing olive oil red onion yellow bell pepper Directions: dice the carrot grill the carrot fry the chicken wing slice the red onion roast the red onion chop the yellow bell pepper grill the yellow bell pepper prepare meal
+Available actions:
+0 cook yellow bell pepper with oven
+1 cook carrot with oven
+2 cook red onion with oven
+3 cook red onion with stove
+4 cook chicken wing with oven
+5 cook carrot with stove
+6 drop chicken wing
+7 take knife
+8 go east
+9 cook yellow bell pepper with stove
+10 cook chicken wing with stove
+11 drop red onion
+12 go west
+13 drop carrot
+14 drop yellow bell pepper
+15 go south
+Next action (answer with the action directly):
+
+6
+
+
+Executed action 10: drop chicken wing
+Reward received: 3
+Room: Kitchen
+Inventory: a diced grilled carrot, a chopped grilled yellow bell pepper, a sliced roasted red onion. Total 3 items.
+Recipe: Ingredients: carrot chicken wing olive oil red onion yellow bell pepper Directions: dice the carrot grill the carrot fry the chicken wing slice the red onion roast the red onion chop the yellow bell pepper grill the yellow bell pepper prepare meal
+Available actions:
+0 cook red onion with stove
+1 go south
+2 cook carrot with oven
+3 go west
+4 cook red onion with oven
+5 take knife
+6 take chicken wing
+7 go east
+8 cook yellow bell pepper with stove
+9 drop red onion
+10 drop carrot
+11 cook yellow bell pepper with oven
+12 cook carrot with stove
+13 drop yellow bell pepper
+Next action (answer with the action directly):
+
+6
+
+
+Executed action 11: take chicken wing
+Reward received: 3
+Room: Kitchen
+Inventory: a diced grilled carrot, a chopped grilled yellow bell pepper, a fried chicken wing, a sliced roasted red onion. Total 4 items.
+Recipe: Ingredients: carrot chicken wing olive oil red onion yellow bell pepper Directions: dice the carrot grill the carrot fry the chicken wing slice the red onion roast the red onion chop the yellow bell pepper grill the yellow bell pepper prepare meal
+Available actions:
+0 cook red onion with oven
+1 go east
+2 drop red onion
+3 cook chicken wing with oven
+4 drop chicken wing
+5 take knife
+6 cook chicken wing with stove
+7 go south
+8 cook yellow bell pepper with oven
+9 drop yellow bell pepper
+10 cook carrot with stove
+11 drop carrot
+12 cook yellow bell pepper with stove
+13 cook red onion with stove
+14 go west
+15 cook carrot with oven
+Next action (answer with the action directly):
+
+6

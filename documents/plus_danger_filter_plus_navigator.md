@@ -1,3 +1,21 @@
+## 2025.7.29 重新训练navigator模型，然后加上危险过滤
+
+```log
+Full valid score (0): 1.0 with UCB1, average step 13.211711711711711
+Full test score (0): 0.9655894673847996 with UCB1, average step 23.095330739299612
+Full valid score (1): 0.9959758551307847 with UCB1, average step 13.045045045045045
+Full test score (1): 0.9673847995212448 with UCB1, average step 22.7431906614786
+Full valid score (2): 1.0 with UCB1, average step 13.085585585585585
+Full test score (2): 0.971573907839617 with UCB1, average step 22.459143968871594
+```
+
+平均： 
+* valid: [1.0, 0.9959758551307847, 1.0] -> 0.9986586183769282
+* test: [0.9655894673847996, 0.9673847995212448, 0.971573907839617] -> 0.9681827249152204
+
+## old
+
+
 在cogniAgent之上使用危险过滤器 + 导航器
 
 BEST_MODELS: [2, 1, 3]

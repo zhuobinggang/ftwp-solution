@@ -1,7 +1,5 @@
-# 2025.5.22 navigator模型的性能很好，去掉danger filter后再训练看看 —— 0.95
-# 2025.5.17 基于最新的模型danger filter。使用navigator来准备训练集 + 训练cogniAgent模型
-# 2025.5.16 在训练好的模型的基础上改善ucb1逻辑，使用model_danger_command.py来判断危险指令，对于危险指令，我们将其设定为执行过一次
 # 2025.7.29 由于之前覆盖了模型，重新训练的结果 —— 0.937
+# 2025.7.29 基于覆盖后的模型重新测试navigator + danger filter的性能
 from game_command_generate import Game_command_generate_bert_filter_with_navigator, default_game
 from dataset_create_taku import row_to_game_state, get_cv_games, get_game_name
 from dataset_create_taku_command_generate import read_csv_dataset
@@ -39,7 +37,7 @@ MAX_TEST_STEP = 100
 MAX_TOKEN_SIZE = 342
 NEGATIVE_SAMPLE_SIZE = 4
 
-DANGER_FILTER_ON = False # NOTE: 对于navigator only模型，danger filter不需要打开
+DANGER_FILTER_ON = True # NOTE: 对于navigator only模型，danger filter不需要打开
 
 # NOTE: For testing
 # TRAIN_SPLIT = 'fake_test'
@@ -291,7 +289,7 @@ class Model_ucb1(Model):
         masked_state_action_executed_count = [a + b for a, b in zip(state_action_executed_count, state_action_executed_count_mask)]
         return masked_state_action_executed_count
     def danger_action_mask(self, game_state: Game_state, actions):
-        raise NotImplementedError('Should not be used in navigator only model!')
+        # raise NotImplementedError('Should not be used in navigator only model!')
         danger_action_mask = [0] * len(actions)
         # NOTE: 2025.5.16 使用bert来判断危险指令
         recip_text = game_state.recipe_clean().strip()
@@ -441,9 +439,9 @@ def test_trained(repeat = 3):
     for rp in range(repeat):
         path = f'{SAVE_DIR}/roberta_theirs_repeat_{rp}_epoch_{BEST_MODELS[rp]}.pth'
         model = get_model(path, init_func=INIC_FUNC)
-        # s1, avg_step = valid_all(model, split=VALID_SPLIT, game_init_func=GAME_INIT_FUNC)
-        # print(f'Full valid score ({rp}): {s1} {ucb1_on}, average step {avg_step}')
-        # logger.error(f'Full valid score ({rp}): {s1} {ucb1_on}, average step {avg_step}')
+        s1, avg_step = valid_all(model, split=VALID_SPLIT, game_init_func=GAME_INIT_FUNC)
+        print(f'Full valid score ({rp}): {s1} {ucb1_on}, average step {avg_step}')
+        logger.error(f'Full valid score ({rp}): {s1} {ucb1_on}, average step {avg_step}')
         s2, avg_step = valid_all(model, split=TEST_SPLIT, game_init_func=GAME_INIT_FUNC)
         print(f'Full test score ({rp}): {s2} {ucb1_on}, average step {avg_step}')
         logger.error(f'Full test score ({rp}): {s2} {ucb1_on}, average step {avg_step}')

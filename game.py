@@ -173,6 +173,7 @@ class Game_handle_worldmap(Game_move_action_augment):
                 self.worldMap[prev_room][direction] = current_room
                 self.worldMap[current_room][op_direction] = prev_room
         elif action.startswith('navigate to '):
+            # logger.warning(f'{action}')
             prev_room = common.extract_room_name(self.info['description'])
             entity_or_room = action.replace('navigate to ', '')
             path = []

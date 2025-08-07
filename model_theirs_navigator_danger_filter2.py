@@ -608,5 +608,7 @@ def test_trained_individual_scores(repeat = 3):
     for rp in range(repeat):
         path = f'{SAVE_DIR}/roberta_theirs_repeat_{rp}_epoch_{BEST_MODELS[rp]}.pth'
         model = get_model(path, init_func=INIC_FUNC)
+        scores, avg_step = valid_all_keep_individual_scores(model, split='valid')
+        print(f'{rp}: Danger filter + navigator: Full valid scores ({rp}): {scores} {ucb1_on}, average step {avg_step}')
         scores, avg_step = valid_all_keep_individual_scores(model, split='test')
-        print(f'Ours: Full valid scores ({rp}): {scores} {ucb1_on}, average step {avg_step}')
+        print(f'{rp}: Danger filter + navigator: Full test scores ({rp}): {scores} {ucb1_on}, average step {avg_step}')
